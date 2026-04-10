@@ -1,0 +1,56 @@
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f2f5;--white:#fff;--border:#e2e5eb;
+  --accent:#2563eb;--accent-h:#1d4ed8;--accent-bg:#eff6ff;--accent-text:#1d4ed8;
+  --sidebar-bg:#111827;--sidebar-text:#9ca3af;--sidebar-active:#fff;--sidebar-active-bg:#1f2937;
+  --text1:#111827;--text2:#6b7280;--text3:#9ca3af;
+  --green:#10b981;--green-bg:#ecfdf5;--red:#ef4444;--red-bg:#fef2f2;
+  --amber:#f59e0b;--amber-bg:#fffbeb;--purple:#8b5cf6;--purple-bg:#f5f3ff;
+  --font:'Inter',-apple-system,sans-serif;
+  --r:8px;--r-lg:12px;
+  --shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,0.08);
+}
+html,body{height:100%;font-family:var(--font);-webkit-font-smoothing:antialiased;background:var(--bg);color:var(--text1)}
+body{display:flex;min-height:100vh;overflow:hidden}
+.sidebar{width:240px;flex-shrink:0;background:var(--sidebar-bg);display:flex;flex-direction:column;height:100vh;position:fixed;left:0;top:0;z-index:100;transition:transform .25s ease;overflow-y:auto}
+.sidebar-logo{padding:20px 20px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0}
+.sidebar-logo .ico{width:34px;height:34px;background:var(--accent);border-radius:9px;display:grid;place-items:center;flex-shrink:0}
+.sidebar-logo .ico svg{width:18px;height:18px;fill:#fff}
+.sidebar-logo .nm{font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.3px}
+.sidebar-logo .ver{font-size:10px;color:#4b5563;font-weight:500}
+.nav-section{padding:20px 12px 4px;font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:1px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:1px 8px;border-radius:var(--r);color:var(--sidebar-text);cursor:pointer;text-decoration:none;font-size:13px;font-weight:500;transition:all .15s}
+.nav-item svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}
+.nav-item:hover{background:var(--sidebar-active-bg);color:#e5e7eb}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active)}
+.nav-item .badge{margin-left:auto;background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700}
+.sidebar-bottom{margin-top:auto;padding:12px;border-top:1px solid rgba(255,255,255,0.06)}
+.user-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r);background:rgba(255,255,255,0.04);cursor:pointer;transition:background .15s;text-decoration:none}
+.user-card:hover{background:rgba(255,255,255,0.08)}
+.user-av{width:34px;height:34px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
+.user-info .nm{font-size:13px;font-weight:600;color:#f3f4f6}
+.user-info .rl{font-size:11px;color:#6b7280}
+.user-card .logout-ic{margin-left:auto;color:#4b5563;display:grid;place-items:center}
+.user-card .logout-ic svg{width:15px;height:15px;fill:currentColor}
+/* .main is an alias for .sb-main (from includes/sidebar.php) */
+.main,.sb-main{margin-left:230px;flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.topbar{background:var(--white);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:700;color:var(--text1);flex:1}
+.topbar-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:var(--r);border:1.5px solid var(--border);background:var(--white);color:var(--text2);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:500;text-decoration:none;transition:all .15s}
+.topbar-btn:hover{border-color:var(--accent);color:var(--accent)}
+.topbar-btn svg{width:15px;height:15px;fill:currentColor}
+.topbar-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.25)}
+.topbar-btn.primary:hover{background:var(--accent-h);color:#fff}
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text2)}
+.hamburger svg{width:20px;height:20px;fill:currentColor}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99}
+.content{flex:1;overflow-y:auto;padding:24px}
+@media(max-width:900px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .main,.sb-main{margin-left:0}
+  .hamburger{display:flex}
+  .overlay.show{display:block}
+}
+@media(max-width:600px){.content{padding:16px}.topbar{padding:0 16px}}

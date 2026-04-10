@@ -1,0 +1,98 @@
+<?php
+switch ($action) {
+
+  case 'get_all':
+    $rows = DB::fetchAll("SELECT `key`, value FROM settings");
+    $out  = [];
+    foreach ($rows as $r) $out[$r['key']] = $r['value'];
+    Response::success($out);
+    break;
+
+  case 'save_all':
+    // // Auth::requirePermission('settings'); — handled by session check — handled by session check
+
+    // ── Image uploads ──
+    $uploadDir = ROOT_PATH . '/public/uploads/';
+    $imageKeys = [
+      'bkash_qr_image'  => 'qr/bkash_',
+      'nagad_qr_image'  => 'qr/nagad_',
+      'rocket_qr_image' => 'qr/rocket_',
+      'business_logo'   => 'logos/logo_',
+    ];
+
+    foreach ($imageKeys as $key => $prefix) {
+      $fileKey = str_replace(['_qr_image','business_'], ['_file',''], $key);
+      // Match POST field name to file input name
+      $fieldName = ($key === 'business_logo') ? 'business_logo' : str_replace('_image', '_image', $key);
+
+      if (!empty($_FILES[$key]['name'])) {
+        $file = $_FILES[$key];
+        $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg','jpeg','png','gif','webp'])) continue;
+        if ($file['size'] > 2 * 1024 * 1024) continue;
+
+        $filename = $prefix . time() . '.' . $ext;
+        $dest     = $uploadDir . $filename;
+
+        if (!is_dir(dirname($dest))) mkdir(dirname($dest), 0755, true);
+        if (move_uploaded_file($file['tmp_name'], $dest)) {
+          // Delete old file
+          $old = DB::fetch("SELECT value FROM settings WHERE `key`=?", [$key]);
+          if ($old && $old['value'] && file_exists(ROOT_PATH . '/public/' . $old['value'])) {
+            @unlink(ROOT_PATH . '/public/' . $old['value']);
+          }
+          $val = 'nexapos/public/uploads/' . $filename;
+          DB::query(
+            "INSERT INTO settings (`key`,value,`group`) VALUES (?,?,?)
+             ON DUPLICATE KEY UPDATE value=?",
+            [$key, $val, 'media', $val]
+          );
+        }
+      }
+    }
+
+    // ── Text / toggle settings ──
+    $allowed = [
+      'business_name'        => 'general',
+      'business_email'       => 'general',
+      'business_phone'       => 'general',
+      'business_address'     => 'general',
+      'timezone'             => 'general',
+      'low_stock_alert'      => 'general',
+      'currency'             => 'tax',
+      'currency_symbol'      => 'tax',
+      'tax_enabled'          => 'tax',
+      'tax_rate'             => 'tax',
+      'invoice_prefix'       => 'orders',
+      'invoice_start'        => 'orders',
+      'receipt_footer'       => 'receipt',
+      'receipt_auto_print'   => 'receipt',
+      'receipt_show_logo'    => 'receipt',
+      'thermal_printer'      => 'receipt',
+      'cash_drawer_enabled'  => 'hardware',
+      'cash_drawer_auto'     => 'hardware',
+      'cash_drawer_manual_btn'=> 'hardware',
+      'cash_drawer_port'     => 'hardware',
+      'loyalty_enabled'      => 'loyalty',
+      'points_per_amount'    => 'loyalty',
+      'points_value'         => 'loyalty',
+      'qr_payment_enabled'   => 'payment',
+    ];
+
+    foreach ($allowed as $key => $group) {
+      if (!isset($_POST[$key])) continue;
+      $val = trim($_POST[$key]);
+      DB::query(
+        "INSERT INTO settings (`key`,value,`group`) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE value=?",
+        [$key, $val, $group, $val]
+      );
+    }
+
+    log_activity('settings_updated', 'settings', 'Settings saved');
+    Response::success(null, 'Settings saved successfully');
+    break;
+
+  default:
+    Response::error("Unknown action: {$action}", 404);
+}

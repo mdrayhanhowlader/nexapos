@@ -1,0 +1,17 @@
+# Uploaded product images (optional — remove if you want to track them)
+# public/uploads/
+
+# PHP config with secrets
+config/database.php
+config/secrets.php
+.env
+.env.*
+
+# XAMPP / OS junk
+.DS_Store
+Thumbs.db
+*.log
+
+# Backup files
+*.bak
+*.bak2
