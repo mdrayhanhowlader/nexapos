@@ -230,7 +230,30 @@ const POSModals = {
     const { order, items, payments, outlet } = res.data;
     const el = document.getElementById('rcpContent');
     if (el) el.innerHTML = this.buildReceipt(order, items, payments, outlet);
+
+    // Update print target notice
+    this._updateRcpPrinterInfo();
+
     POS.openModal('rcpModal');
+  },
+
+  _updateRcpPrinterInfo() {
+    const dot  = document.getElementById('rcpPrinterDot');
+    const name = document.getElementById('rcpPrinterName');
+    if (!dot || !name) return;
+    const P = typeof POSPrinter !== 'undefined' ? POSPrinter : null;
+    if (!window.NEXAPOS?.printerEnabled) {
+      dot.style.background  = '#6b7280';
+      name.textContent = 'Printer disabled — enable in Settings → Hardware';
+      return;
+    }
+    if (!P || P.state !== 'connected' || P.type === 'browser') {
+      dot.style.background  = '#f59e0b';
+      name.textContent = 'Browser print dialog (click printer icon to connect hardware printer)';
+    } else {
+      dot.style.background  = '#10b981';
+      name.textContent = 'Will print to: ' + (P.name || 'Connected Printer');
+    }
   },
 
   buildReceipt(o, items, payments, outlet) {
@@ -246,10 +269,13 @@ const POSModals = {
         <span>${POS.fmt(p.amount)}</span>
       </div>`).join('');
 
+    const shopName = outlet?.name || window.NEXAPOS?.appName || 'NexaPOS';
+    const shopLogo = window.NEXAPOS?.appLogo || null;
     return `
       <div class="rcp-paper" id="printRcp">
         <div class="rcp-hd">
-          <strong style="font-size:14px">${outlet?.name || 'NexaPOS'}</strong><br>
+          ${shopLogo ? `<img src="${shopLogo}" alt="Logo" style="max-width:80px;max-height:50px;margin-bottom:6px;display:block;margin-left:auto;margin-right:auto">` : ''}
+          <strong style="font-size:14px">${shopName}</strong><br>
           <small>${outlet?.address || ''}</small>
           ${outlet?.phone ? `<br><small>${outlet.phone}</small>` : ''}
         </div>
@@ -284,18 +310,22 @@ const POSModals = {
   },
 
   printReceipt() {
-    const content = document.getElementById('printRcp')?.outerHTML;
-    if (!content) return;
-    const w = window.open('', '_blank', 'width=380,height=620');
-    w.document.write(`<!DOCTYPE html><html><head><title>Receipt</title>
-      <style>
-        body{font-family:'Courier New',monospace;font-size:12px;margin:0;padding:10px}
-        .rcp-row{display:flex;justify-content:space-between}
-        .rcp-div{border-top:1px dashed #ccc;margin:6px 0}
-        .rcp-tot{font-weight:700;font-size:13px}
-      </style>
-      </head><body onload="window.print();window.close()">${content}</body></html>`);
-    w.document.close();
+    if (typeof POSPrinter !== 'undefined') {
+      POSPrinter._browserPrint();
+    } else {
+      // fallback if printer module not loaded
+      const content = document.getElementById('printRcp')?.outerHTML;
+      if (!content) return;
+      const html = `<!DOCTYPE html><html><head><title>Receipt</title>
+        <style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px}
+        .rcp-row{display:flex;justify-content:space-between}.rcp-div{border-top:1px dashed #ccc;margin:5px 0}
+        .rcp-tot{font-weight:700}.rcp-hd{text-align:center}</style></head>
+        <body>${content}<script>window.onload=function(){window.print();setTimeout(()=>window.close(),500)}<\/script></body></html>`;
+      const blob = new Blob([html], { type: 'text/html' });
+      const url  = URL.createObjectURL(blob);
+      const w    = window.open(url, '_blank', 'width=400,height=650');
+      if (w) setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
   },
 
   newSale() {

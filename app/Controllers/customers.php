@@ -114,6 +114,43 @@ switch ($action) {
         Response::success($rows);
         break;
 
+    case 'guests':
+        $page     = max(1, (int)($_GET['page']      ?? 1));
+        $perPage  = (int)($_GET['per_page']           ?? 20);
+        $search   = trim($_GET['search']              ?? '');
+        $dateFrom = trim($_GET['date_from']           ?? '');
+        $dateTo   = trim($_GET['date_to']             ?? '');
+        $where    = "o.customer_id IS NULL AND o.status='completed'";
+        $params   = [];
+        if ($search) {
+            $where   .= ' AND (o.invoice_no LIKE ? OR u.name LIKE ?)';
+            $params[] = "%$search%";
+            $params[] = "%$search%";
+        }
+        if ($dateFrom) { $where .= ' AND DATE(o.created_at) >= ?'; $params[] = $dateFrom; }
+        if ($dateTo)   { $where .= ' AND DATE(o.created_at) <= ?'; $params[] = $dateTo; }
+        $total = (int)DB::fetch(
+            "SELECT COUNT(*) as n FROM orders o
+             LEFT JOIN users u ON u.id=o.cashier_id
+             WHERE $where", $params
+        )['n'];
+        $pg   = paginate($total, $page, $perPage);
+        $rows = DB::fetchAll(
+            "SELECT o.id, o.invoice_no, o.total, o.paid, o.change_due, o.subtotal,
+                    o.discount_amount, o.tax_amount, o.created_at,
+                    u.name AS cashier_name,
+                    (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS item_count,
+                    (SELECT GROUP_CONCAT(oi.name SEPARATOR ', ') FROM order_items oi WHERE oi.order_id=o.id LIMIT 3) AS items_preview
+             FROM orders o
+             LEFT JOIN users u ON u.id=o.cashier_id
+             WHERE $where
+             ORDER BY o.id DESC
+             LIMIT {$pg['per_page']} OFFSET {$pg['offset']}",
+            $params
+        );
+        Response::success(['orders' => $rows, 'pagination' => $pg, 'total_guests' => $total]);
+        break;
+
     case 'count':
         Response::success((int)DB::fetch("SELECT COUNT(*) as n FROM customers WHERE status='active'")['n']);
         break;

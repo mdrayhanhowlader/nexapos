@@ -6,7 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 $module = $_REQUEST['module'] ?? '';
 $action = $_REQUEST['action'] ?? '';
 
-$allowed = ['pos','products','orders','customers','reports','settings','employees','inventory','purchases'];
+$allowed = ['pos','products','orders','customers','reports','settings','employees','inventory','purchases','expenses','suppliers'];
 if (!in_array($module, $allowed)) {
     Response::error('Invalid module', 404);
 }

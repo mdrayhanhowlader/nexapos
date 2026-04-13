@@ -66,22 +66,28 @@ function debounce(fn, delay) {
   };
 }
 
-function renderPagination(pg, fnName) {
-  const el = document.getElementById('pagination');
+// containerId is optional — defaults to 'pagination' for backward compat
+// pageVar is optional — variable name to set (defaults to 'currentPage')
+function renderPagination(pg, fnName, containerId, pageVar) {
+  const elId = containerId || 'pagination';
+  const pVar = pageVar || 'currentPage';
+  const el   = document.getElementById(elId);
   if (!el || !pg) return;
   const { total, current_page, total_pages, per_page } = pg;
+  if (!total_pages || total_pages < 1) { el.style.display='none'; return; }
   const from = ((current_page - 1) * per_page) + 1;
   const to   = Math.min(current_page * per_page, total);
   el.innerHTML = `
     <span>Showing ${from}–${to} of ${total}</span>
     <div class="page-btns">
-      <button class="page-btn" onclick="currentPage=${current_page-1};${fnName}()" ${current_page<=1?'disabled':''}>‹</button>
+      <button class="page-btn" onclick="${pVar}=${current_page-1};${fnName}()" ${current_page<=1?'disabled':''}>‹</button>
       ${Array.from({length:Math.min(5,total_pages)},(_,i)=>{
         const p = Math.max(1, Math.min(current_page-2, total_pages-4)) + i;
-        return p<=total_pages ? `<button class="page-btn ${p===current_page?'active':''}" onclick="currentPage=${p};${fnName}()">${p}</button>` : '';
+        return p<=total_pages ? `<button class="page-btn ${p===current_page?'active':''}" onclick="${pVar}=${p};${fnName}()">${p}</button>` : '';
       }).join('')}
-      <button class="page-btn" onclick="currentPage=${current_page+1};${fnName}()" ${current_page>=total_pages?'disabled':''}>›</button>
+      <button class="page-btn" onclick="${pVar}=${current_page+1};${fnName}()" ${current_page>=total_pages?'disabled':''}>›</button>
     </div>`;
+  el.style.display = total_pages > 1 ? 'flex' : 'none';
 }
 
 function openSidebar() {

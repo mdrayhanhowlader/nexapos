@@ -61,7 +61,7 @@ switch ($action) {
         if (empty($items))    Response::error('Cart is empty');
         if (empty($payments)) Response::error('No payment selected');
 
-        DB::transaction(function() use ($payload, $items, $payments) {
+        $result = DB::transaction(function() use ($payload, $items, $payments) {
             $customerId = $payload['customer_id'] ?? null;
             $discType   = $payload['discount_type']  ?? 'fixed';
             $discValue  = (float)($payload['discount_value'] ?? 0);
@@ -131,7 +131,7 @@ switch ($action) {
                     $cur    = DB::fetch("SELECT quantity FROM inventory WHERE product_id=? AND warehouse_id=1", [$item['product_id']]);
                     $before = $cur ? (float)$cur['quantity'] : 0;
                     $after  = max(0, $before - (float)$item['quantity']);
-                    DB::query("INSERT INTO inventory (product_id,warehouse_id,quantity) VALUES (?,1,?) ON DUPLICATE KEY UPDATE quantity=?", [$item['product_id'], $after, $after]);
+                    DB::query("INSERT INTO inventory (product_id,variant_id,warehouse_id,quantity) VALUES (?,0,1,?) ON DUPLICATE KEY UPDATE quantity=?", [$item['product_id'], $after, $after]);
                     DB::insert('stock_movements', [
                         'product_id'      => $item['product_id'],
                         'warehouse_id'    => 1,

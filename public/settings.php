@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../bootstrap.php';
 Auth::requireAuth();
 $user    = Auth::user();
-$appName = Config::get('app.name', 'NexaPOS');
+$appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['value'] ?? Config::get('app.name', 'NexaPOS');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,6 +12,7 @@ $appName = Config::get('app.name', 'NexaPOS');
 <title>Settings — <?= htmlspecialchars($appName) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/layout.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -25,28 +26,8 @@ $appName = Config::get('app.name', 'NexaPOS');
 html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);background:var(--bg)}
 a{text-decoration:none;color:inherit}
 
-#layout{display:flex;height:100vh;overflow:hidden}
-
-/* Sidebar */
-#sidebar{width:220px;flex-shrink:0;background:var(--sidebar);display:flex;flex-direction:column;overflow:hidden}
-.sb-brand{display:flex;align-items:center;gap:9px;padding:16px 14px;border-bottom:1px solid rgba(255,255,255,.07)}
-.sb-brand-ico{width:30px;height:30px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.sb-brand-ico svg{width:16px;height:16px;fill:#fff}
-.sb-brand-name{font-size:15px;font-weight:700;color:#fff}
-.sb-nav{flex:1;overflow-y:auto;padding:10px 8px}
-.sb-section{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.3);padding:10px 8px 5px;margin-top:4px}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;color:rgba(255,255,255,.6);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,color .15s;margin-bottom:2px}
-.sb-item:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.9)}
-.sb-item.active{background:rgba(37,99,235,.25);color:#fff}
-.sb-item svg{width:16px;height:16px;fill:currentColor;flex-shrink:0}
-.sb-foot{padding:10px 8px;border-top:1px solid rgba(255,255,255,.07)}
-.sb-user{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px}
-.sb-ava{width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
-.sb-uname{font-size:12px;font-weight:600;color:#fff}
-.sb-urole{font-size:10px;color:rgba(255,255,255,.4)}
-
-/* Main */
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+/* Settings main layout */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;height:100vh}
 #topbar{display:flex;align-items:center;gap:12px;padding:0 24px;height:56px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0}
 .page-title{font-size:16px;font-weight:700}
 .tb-sp{flex:1}
@@ -201,46 +182,11 @@ input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="layout">
+<?php require_once __DIR__ . '/includes/sidebar.php'; ?>
 
-<!-- SIDEBAR -->
-<nav id="sidebar">
-  <div class="sb-brand">
-    <div class="sb-brand-ico"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg></div>
-    <div><div class="sb-brand-name">NexaPOS</div></div>
-  </div>
-  <div class="sb-nav">
-    <div class="sb-section">Main</div>
-    <a href="/nexapos/public/pos.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>POS Terminal</a>
-    <a href="/nexapos/public/dashboard.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>Dashboard</a>
-    <div class="sb-section">Sales</div>
-    <a href="/nexapos/public/orders.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M19 3H4.99C3.89 3 3 3.9 3 5l.01 14c0 1.1.89 2 1.99 2H19c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/></svg>Orders</a>
-    <a href="/nexapos/public/customers.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>Customers</a>
-    <a href="/nexapos/public/expenses.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>Expenses</a>
-    <div class="sb-section">Inventory</div>
-    <a href="/nexapos/public/products.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.72V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.72c.57-.38 1-.99 1-1.71V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm3-8H6V4h12v2z"/></svg>Products</a>
-    <a href="/nexapos/public/inventory.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.3C18 2.55 16.33 1 14.3 1c-1.74 0-2.6.9-3.3 2.05C10.3 1.9 9.44 1 7.7 1 5.67 1 4 2.55 4 4.7c0 .42.11.86.18 1.3H2v4h20V6zm-7.7 0h-1.6c.27-.64.7-1.3 1.6-1.3s1.33.66 1.6 1.3h-1.6zM6.4 6c.27-.64.7-1.3 1.6-1.3s1.33.66 1.6 1.3H6.4zM4 19c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-9H4v9z"/></svg>Inventory</a>
-    <a href="/nexapos/public/purchases.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96C5 16.1 6.1 17 7 17h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63H19c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0023.44 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>Purchases</a>
-    <div class="sb-section">Reports & Config</div>
-    <a href="/nexapos/public/reports.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>Reports</a>
-    <a href="/nexapos/public/employees.php" class="sb-item"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Employees</a>
-    <a href="/nexapos/public/settings.php" class="sb-item active"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87a.48.48 0 00.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>Settings</a>
-  </div>
-  <div class="sb-foot">
-    <div class="sb-user">
-      <div class="sb-ava"><?= strtoupper(substr($user['name'] ?? 'A', 0, 1)) ?></div>
-      <div style="flex:1;min-width:0">
-        <div class="sb-uname"><?= htmlspecialchars($user['name'] ?? '') ?></div>
-        <div class="sb-urole"><?= htmlspecialchars($user['role'] ?? '') ?></div>
-      </div>
-      <a href="/nexapos/public/logout.php" style="color:rgba(255,255,255,.4);display:flex" title="Logout">
-        <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
-      </a>
-    </div>
-  </div>
-</nav>
+<div class="sb-main">
 
-<!-- MAIN -->
+<!-- SETTINGS CONTENT -->
 <div id="main">
   <div id="topbar">
     <span class="page-title">Settings</span>
@@ -636,7 +582,6 @@ input[type=file]{display:none}
     </div><!-- /#settingsBody -->
   </div><!-- /#content -->
 </div><!-- /#main -->
-</div><!-- /#layout -->
 
 <div class="toast-c" id="toastWrap"></div>
 
@@ -809,14 +754,16 @@ async function saveAll() {
     const data = await res.json();
     if (data.success) {
       toast('Settings saved successfully', 'success');
+      // Reload after short delay so sidebar/logo/name refresh from server
+      setTimeout(() => location.reload(), 1200);
     } else {
       toast(data.message || 'Save failed', 'error');
+      ind.classList.remove('show');
     }
   } catch(e) {
     toast('Network error', 'error');
+    ind.classList.remove('show');
   }
-
-  ind.classList.remove('show');
 }
 
 // ── Toast ──
@@ -835,5 +782,6 @@ function toast(msg, type='info', dur=3000) {
 // Init
 loadSettings();
 </script>
+</div><!-- /.sb-main -->
 </body>
 </html>

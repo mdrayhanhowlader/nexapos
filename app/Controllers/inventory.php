@@ -76,7 +76,7 @@ switch ($action) {
             default  => $qty
         };
         DB::query(
-            "INSERT INTO inventory (product_id,warehouse_id,quantity) VALUES (?,1,?)
+            "INSERT INTO inventory (product_id,variant_id,warehouse_id,quantity) VALUES (?,0,1,?)
              ON DUPLICATE KEY UPDATE quantity=?",
             [$pid, $after, $after]
         );
@@ -110,7 +110,7 @@ switch ($action) {
             $toQty   = $toRow ? (float)$toRow['quantity'] : 0;
             DB::query("UPDATE inventory SET quantity=? WHERE product_id=? AND warehouse_id=?", [$fromQty - $qty, $pid, $from]);
             DB::query(
-                "INSERT INTO inventory (product_id,warehouse_id,quantity) VALUES (?,?,?)
+                "INSERT INTO inventory (product_id,variant_id,warehouse_id,quantity) VALUES (?,0,?,?)
                  ON DUPLICATE KEY UPDATE quantity=?",
                 [$pid, $to, $toQty + $qty, $toQty + $qty]
             );

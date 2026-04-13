@@ -171,13 +171,29 @@ const POSPayment = {
     const orderId = res.data ? parseInt(res.data.order_id) : null;
     POS.lastOrderId = orderId;
 
-    // Cash drawer
-    if (res.data && res.data.open_drawer && window.NEXAPOS && window.NEXAPOS.drawerEnabled && window.NEXAPOS.drawerAuto) this.triggerDrawer();
+    // Cash drawer — open if enabled + auto + server says open
+    if (res.data?.open_drawer && window.NEXAPOS?.drawerEnabled) {
+      if (window.NEXAPOS.drawerAuto) {
+        this.triggerDrawer();
+      }
+    }
 
     POS.closeModal('payModal');
     POSCart.clear();
     if (orderId) {
-      setTimeout(() => POSModals.showReceipt(orderId), 300);
+      setTimeout(() => {
+        POSModals.showReceipt(orderId);
+        // Auto-print if enabled
+        if (window.NEXAPOS?.printerEnabled && window.NEXAPOS?.autoPrint) {
+          setTimeout(() => {
+            if (typeof POSPrinter !== 'undefined') {
+              POSPrinter.print(orderId);
+            } else {
+              POSModals.printReceipt();
+            }
+          }, 600);
+        }
+      }, 300);
     }
     POS.toast('Sale complete — ' + (res.data ? res.data.invoice_no : ''), 'success');
     this._processing = false;
@@ -185,8 +201,9 @@ const POSPayment = {
   },
 
   // ── Cash drawer ────────────────────────────
-  triggerDrawer() {
-    if (!window.NEXAPOS || !window.NEXAPOS.drawerEnabled) return;
+  // manualTrigger=true means user clicked the button — skip the enabled check
+  triggerDrawer(manualTrigger = false) {
+    if (!manualTrigger && (!window.NEXAPOS || !window.NEXAPOS.drawerEnabled)) return;
     const el = document.createElement('div');
     el.className = 'drawer-pop';
     el.innerHTML = `
@@ -204,11 +221,23 @@ const POSPayment = {
   },
 
   async openDrawerSerial() {
+    // Reuse the already-connected printer port if available
+    const existingPort = (typeof POSPrinter !== 'undefined' && POSPrinter.state === 'connected' && POSPrinter.type === 'serial')
+      ? POSPrinter.port : null;
+
+    const drawerCmd = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]); // ESC/POS open drawer
+
+    if (existingPort) {
+      const writer = existingPort.writable.getWriter();
+      await writer.write(drawerCmd);
+      writer.releaseLock();
+      return;
+    }
+    // No connected port — open a temporary one (will prompt user once)
     const port = await navigator.serial.requestPort();
     await port.open({ baudRate: 9600 });
     const writer = port.writable.getWriter();
-    // ESC/POS open drawer command
-    await writer.write(new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]));
+    await writer.write(drawerCmd);
     writer.releaseLock();
     await port.close();
   },

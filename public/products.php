@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../bootstrap.php';
 Auth::requireAuth();
 $user    = Auth::user();
-$appName = Config::get('app.name', 'NexaPOS');
+$appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['value'] ?? Config::get('app.name', 'NexaPOS');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -166,6 +166,7 @@ tr:hover td{background:#fafafa}
   <header class="topbar">
     <h1>Products</h1>
     <button class="btn" onclick="openCats()"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>Categories</button>
+    <button class="btn" id="dupBtn" onclick="removeDuplicates()" style="display:none;color:var(--red);border-color:#fecaca"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>Remove Duplicates</button>
     <button class="btn btn-primary" onclick="openAdd()"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Add Product</button>
   </header>
 
@@ -204,6 +205,7 @@ tr:hover td{background:#fafafa}
   <div class="mc">
     <div class="mh"><h3 id="mtitle">Add Product</h3><button class="mx" onclick="closeM('prodModal')">×</button></div>
     <div class="mb">
+      <input type="hidden" id="prodId" value="">
       <div class="fg">
         <label>Product Image</label>
         <div class="imgbox" id="imgbox" onclick="document.getElementById('imgInp').click()">
@@ -233,7 +235,7 @@ tr:hover td{background:#fafafa}
         <div class="fg"><label>Wholesale (৳)</label><input class="fc" id="fwhole" type="number" min="0" step="0.01" placeholder="0.00"></div>
       </div>
       <div class="r2">
-        <div class="fg"><label>Opening Stock</label><input class="fc" id="fstock" type="number" min="0" placeholder="0"><div class="hint">New products only</div></div>
+        <div class="fg" id="fstockWrap"><label id="fstockLbl">Opening Stock</label><input class="fc" id="fstock" type="number" min="0" placeholder="0"><div class="hint" id="fstockHint">Leave blank to keep unchanged when editing</div></div>
         <div class="fg"><label>Stock Alert Qty</label><input class="fc" id="falert" type="number" min="0" placeholder="5"></div>
       </div>
       <div class="r2">
@@ -319,7 +321,19 @@ async function loadProds() {
   document.getElementById('sv1').textContent=active.length;
   document.getElementById('sv2').textContent=active.filter(p=>parseFloat(p.stock||0)>0&&parseFloat(p.stock||0)<=p.stock_alert_qty).length;
   document.getElementById('sv3').textContent=active.filter(p=>parseFloat(p.stock||0)<=0&&p.track_stock).length;
+  // Show "Remove Duplicates" button if duplicates exist
+  const names=prods.map(p=>p.name);
+  const hasDups=names.some((n,i)=>names.indexOf(n)!==i);
+  document.getElementById('dupBtn').style.display=hasDups?'inline-flex':'none';
   doFilter();
+}
+
+async function removeDuplicates(){
+  if(!confirm('This will keep the product with the highest stock and remove all duplicates with the same name. Continue?'))return;
+  const fd=new FormData();
+  const r=await fetch(`${API}?module=products&action=delete_duplicates`,{method:'POST',body:fd}).then(r=>r.json());
+  if(r.success){toast(r.message,'ok');loadProds();}
+  else toast(r.message||'Failed','err');
 }
 
 // Filter
@@ -389,16 +403,22 @@ function render() {
   }else{document.getElementById('pagWrap').style.display='none';}
 }
 
+// Helper: get current editing ID from hidden input (empty = new product)
+function getProdId(){ return document.getElementById('prodId').value; }
+
 // Open add
 function openAdd(){
+  document.getElementById('prodId').value=''; // CLEAR — this is the authoritative ID store
   eid=null;
   document.getElementById('mtitle').textContent='Add Product';
-  ['fn','fsku','fbc','fcost','fprice','fwhole','fstock','falert','ftax','fdesc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['fn','fsku','fbc','fcost','fprice','fwhole','fstock','falert','ftax','fdesc'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
   document.getElementById('funit').value='pcs';
   document.getElementById('fstat').value='active';
   document.getElementById('fcat2').value='';
   document.getElementById('falert').value='5';
   document.getElementById('ftrack').checked=true;
+  document.getElementById('fstockLbl').textContent='Opening Stock';
+  document.getElementById('fstockHint').textContent='Initial quantity (new products only)';
   resetImg();
   document.getElementById('prodModal').classList.add('open');
   setTimeout(()=>document.getElementById('fn').focus(),120);
@@ -406,17 +426,31 @@ function openAdd(){
 
 // Edit
 async function editProd(id){
-  openAdd();eid=id;
-  document.getElementById('mtitle').textContent='Edit Product';
+  // Open modal immediately so user sees loading state
+  document.getElementById('prodId').value=''; // clear while loading
+  eid=null;
+  document.getElementById('mtitle').textContent='Loading…';
+  ['fn','fsku','fbc','fcost','fprice','fwhole','fstock','falert','ftax','fdesc'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  document.getElementById('fstockLbl').textContent='Set Stock To';
+  document.getElementById('fstockHint').textContent='Enter new qty, or leave blank to keep unchanged';
+  resetImg();
+  document.getElementById('prodModal').classList.add('open');
+
   const d=await get('products','get',`id=${id}`);
-  if(!d.success){toast('Load failed','err');return;}
+  if(!d.success){toast('Failed to load product','err');closeM('prodModal');return;}
   const p=d.data;
+
+  // Set the authoritative ID AFTER data loaded — prevents saving with wrong ID
+  document.getElementById('prodId').value=p.id;
+  eid=p.id; // keep eid in sync too
+  document.getElementById('mtitle').textContent='Edit Product';
   document.getElementById('fn').value     =p.name||'';
   document.getElementById('fsku').value   =p.sku||'';
   document.getElementById('fbc').value    =p.barcode||'';
   document.getElementById('fcost').value  =p.cost_price||'';
   document.getElementById('fprice').value =p.selling_price||'';
   document.getElementById('fwhole').value =p.wholesale_price||'';
+  document.getElementById('fstock').value =''; // blank = keep existing
   document.getElementById('falert').value =p.stock_alert_qty||5;
   document.getElementById('ftax').value   =p.tax_rate||0;
   document.getElementById('fdesc').value  =p.description||'';
@@ -438,8 +472,10 @@ async function doSave(){
   const btn=document.getElementById('saveBtn');
   btn.disabled=true;btn.textContent='Saving…';
 
+  // Read ID from the hidden input — this is the ONLY authoritative source
+  const currentId=document.getElementById('prodId').value;
   const fd=new FormData();
-  if(eid)fd.append('id',eid);
+  if(currentId)fd.append('id',currentId);
   fd.append('name',           name);
   fd.append('category_id',    document.getElementById('fcat2').value||'');
   fd.append('sku',            document.getElementById('fsku').value);
@@ -448,7 +484,14 @@ async function doSave(){
   fd.append('cost_price',     document.getElementById('fcost').value||0);
   fd.append('selling_price',  price);
   fd.append('wholesale_price',document.getElementById('fwhole').value||0);
-  fd.append('opening_stock',  document.getElementById('fstock').value||0);
+  const stockVal=document.getElementById('fstock').value;
+  if(currentId){
+    // On edit: send as stock_qty (allows updating existing stock)
+    if(stockVal!=='')fd.append('stock_qty',stockVal);
+  }else{
+    // On add: send as opening_stock
+    fd.append('opening_stock',stockVal||0);
+  }
   fd.append('stock_alert_qty',document.getElementById('falert').value||5);
   fd.append('tax_rate',       document.getElementById('ftax').value||0);
   fd.append('description',    document.getElementById('fdesc').value);
@@ -461,7 +504,7 @@ async function doSave(){
   try{
     const r=await fetch(`${API}?module=products&action=save`,{method:'POST',body:fd});
     const d=await r.json();
-    if(d.success){toast(eid?'Product updated':'Product added','ok');closeM('prodModal');loadProds();}
+    if(d.success){toast(currentId?'Product updated':'Product added','ok');closeM('prodModal');loadProds();}
     else toast(d.message||'Save failed','err');
   }catch(e){toast('Network error','err');}
 
@@ -508,8 +551,20 @@ async function delCat(id){
 
 // Utils
 async function get(mod,act,qs=''){const r=await fetch(`${API}?module=${mod}&action=${act}${qs?'&'+qs:''}`);return r.json();}
-function closeM(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+function closeM(id){
+  document.getElementById(id).classList.remove('open');
+  if(id==='prodModal'){
+    // Always clear the ID when closing — prevents stale ID on next open
+    document.getElementById('prodId').value='';
+    eid=null;
+  }
+}
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{
+  if(e.target===m){
+    m.classList.remove('open');
+    if(m.id==='prodModal'){document.getElementById('prodId').value='';eid=null;}
+  }
+}));
 // CRITICAL: Block Enter key in product modal to prevent duplicate saves
 document.getElementById('prodModal').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&e.target.tagName!=='TEXTAREA'){e.preventDefault();e.stopPropagation();}

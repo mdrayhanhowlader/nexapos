@@ -133,7 +133,7 @@ switch ($action) {
                 $before = $cur ? (float)$cur['quantity'] : 0;
                 $after  = $before + $receivedQty;
                 DB::query(
-                    "INSERT INTO inventory (product_id,warehouse_id,quantity) VALUES (?,?,?)
+                    "INSERT INTO inventory (product_id,variant_id,warehouse_id,quantity) VALUES (?,0,?,?)
                      ON DUPLICATE KEY UPDATE quantity=?",
                     [$pid, $wid, $after, $after]
                 );

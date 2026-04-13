@@ -2,9 +2,10 @@
 require_once __DIR__ . '/../bootstrap.php';
 Auth::requireAuth();
 $user     = Auth::user();
-$appName  = Config::get('app.name', 'NexaPOS');
-$currency = Config::get('app.currency_symbol', '৳');
-$taxRate  = Config::get('app.tax_rate', 0);
+$appName  = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['value'] ?? Config::get('app.name', 'NexaPOS');
+$appLogo  = DB::fetch("SELECT value FROM settings WHERE `key`='business_logo'")['value'] ?? null;
+$currency = DB::fetch("SELECT value FROM settings WHERE `key`='currency_symbol'")['value'] ?? Config::get('app.currency_symbol', '৳');
+$taxRate  = DB::fetch("SELECT value FROM settings WHERE `key`='tax_rate'")['value'] ?? Config::get('app.tax_rate', 0);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -402,10 +403,14 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
   <!-- TOPBAR -->
   <div id="topbar">
     <a href="/nexapos/public/dashboard.php" class="brand" title="Dashboard">
-      <span class="brand-ico">
-        <svg viewBox="0 0 24 24" fill="#fff" style="width:15px;height:15px"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg>
+      <span class="brand-ico" style="<?= $appLogo ? 'background:transparent;overflow:hidden;padding:0' : '' ?>">
+        <?php if ($appLogo): ?>
+          <img src="/<?= htmlspecialchars($appLogo) ?>" alt="Logo" style="width:28px;height:28px;object-fit:contain;border-radius:6px">
+        <?php else: ?>
+          <svg viewBox="0 0 24 24" fill="#fff" style="width:15px;height:15px"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg>
+        <?php endif; ?>
       </span>
-      NexaPOS
+      <?= htmlspecialchars($appName) ?>
     </a>
     <div class="tb-div"></div>
     <div class="tb-search">
@@ -428,6 +433,17 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
       <button class="tb-btn" onclick="POSModals.openShift()">
         <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
         Shift
+      </button>
+      <!-- Printer status (click to configure) -->
+      <button class="tb-btn" onclick="POSPrinter.openModal()" title="Printer — click to configure">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+        <span id="printerStatusTxt">Printer</span>
+        <span id="printerDot" style="width:7px;height:7px;border-radius:50%;background:#6b7280;display:inline-block;flex-shrink:0"></span>
+      </button>
+      <!-- Cash drawer manual button (shown when drawerEnabled + drawerManualBtn) -->
+      <button class="tb-btn" id="drawerBtn" onclick="POSPayment.triggerDrawer(true)" title="Open Cash Drawer" style="display:none">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-1 11H5V10h14v8zM7 15h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zM3 5h18V3H3z"/></svg>
+        Drawer
       </button>
       <div class="tb-div"></div>
       <div class="tb-user">
@@ -666,6 +682,12 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
 <div class="modal" id="rcpModal">
   <div class="mc rcp">
     <div class="mh"><h3>Receipt</h3><button class="mc-x" onclick="POS.closeModal('rcpModal')">×</button></div>
+    <!-- Print target notice -->
+    <div id="rcpPrintTarget" style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg);font-size:12px;color:var(--text2);border-bottom:1px solid var(--border)">
+      <span id="rcpPrinterDot" style="width:8px;height:8px;border-radius:50%;background:#6b7280;flex-shrink:0"></span>
+      <span id="rcpPrinterName">No printer configured</span>
+      <button onclick="POSPrinter.openModal()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--text2)">Change</button>
+    </div>
     <div class="mb" id="rcpContent"></div>
     <div class="mf" style="justify-content:space-between">
       <button class="btn-s" onclick="POSModals.printReceipt()">
@@ -687,6 +709,41 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
     </div>
     <div class="mf">
       <button class="btn-p" onclick="POS.closeModal('noteModal')">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Printer Modal -->
+<div class="modal" id="printerModal">
+  <div class="mc sm">
+    <div class="mh">
+      <h3>🖨 Printer Connection</h3>
+      <button class="mc-x" onclick="POSPrinter.closeModal()">×</button>
+    </div>
+    <div class="mb">
+      <div id="pmStatus" style="margin-bottom:14px;font-size:13px;padding:10px;background:var(--bg);border-radius:6px">
+        <span style="color:#6b7280;font-weight:600">○ Not Connected</span>
+      </div>
+      <div class="fg">
+        <label>Connection Type</label>
+        <select class="fc" id="pmType">
+          <option value="browser">🖥 Browser (system print dialog)</option>
+          <option value="serial">🔌 USB / Serial Cable</option>
+          <option value="bluetooth">📶 Bluetooth</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px">USB and Bluetooth require Chrome or Edge browser</div>
+      </div>
+      <div style="background:var(--bg);border-radius:6px;padding:10px;font-size:12px;color:var(--text2);margin-bottom:12px">
+        <strong>How it works:</strong><br>
+        • <b>Browser</b> — opens system print dialog (works everywhere)<br>
+        • <b>USB/Cable</b> — direct ESC/POS to USB printer (Chrome/Edge)<br>
+        • <b>Bluetooth</b> — pair with BT thermal printer (Chrome/Edge)
+      </div>
+    </div>
+    <div class="mf" style="gap:8px;flex-wrap:wrap">
+      <button class="btn-s" onclick="POSPrinter.testPrint()" style="flex:1">Test Print</button>
+      <button class="btn-s" onclick="POSPrinter.disconnect()" style="flex:1">Disconnect</button>
+      <button class="btn-p" onclick="POSPrinter.connectFromModal()" style="flex:1">Connect</button>
     </div>
   </div>
 </div>
@@ -721,27 +778,41 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
 <!-- Config -->
 <script>
 window.NEXAPOS = {
-  currency:      <?= json_encode($currency) ?>,
-  taxRate:       <?= json_encode((float)$taxRate) ?>,
-  drawerEnabled: <?= (DB::fetch("SELECT value FROM settings WHERE `key`='cash_drawer_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
-  drawerAuto:    <?= (DB::fetch("SELECT value FROM settings WHERE `key`='cash_drawer_auto'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  currency:        <?= json_encode($currency) ?>,
+  appName:         <?= json_encode($appName) ?>,
+  appLogo:         <?= json_encode($appLogo ? '/' . $appLogo : null) ?>,
+  taxRate:         <?= json_encode((float)$taxRate) ?>,
+  drawerEnabled:   <?= (DB::fetch("SELECT value FROM settings WHERE `key`='cash_drawer_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  drawerAuto:      <?= (DB::fetch("SELECT value FROM settings WHERE `key`='cash_drawer_auto'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
   drawerManualBtn: <?= (DB::fetch("SELECT value FROM settings WHERE `key`='cash_drawer_manual_btn'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
-  qrEnabled:     <?= (DB::fetch("SELECT value FROM settings WHERE `key`='qr_payment_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  printerEnabled:  <?= (DB::fetch("SELECT value FROM settings WHERE `key`='thermal_printer'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  autoPrint:       <?= (DB::fetch("SELECT value FROM settings WHERE `key`='receipt_auto_print'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  qrEnabled:       <?= (DB::fetch("SELECT value FROM settings WHERE `key`='qr_payment_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
   user: { id: <?= json_encode($user['id'] ?? 0) ?>, name: <?= json_encode($user['name'] ?? '') ?> }
 };
 </script>
 
 <!-- JS modules -->
-<script src="/nexapos/public/assets/js/pos-core.js?v=1774698339"></script>
-<script src="/nexapos/public/assets/js/pos-products.js?v=1774698339"></script>
-<script src="/nexapos/public/assets/js/pos-cart.js?v=1774698339"></script>
-<script src="/nexapos/public/assets/js/pos-scanner.js?v=1774698339"></script>
-<script src="/nexapos/public/assets/js/pos-payment.js?v=1774698339"></script>
-<script src="/nexapos/public/assets/js/pos-modals.js?v=1774698339"></script>
+<script src="/nexapos/public/assets/js/pos-core.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-products.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-cart.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-scanner.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-payment.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-modals.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-printer.js?v=<?= time() ?>"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/nexapos/sw.js').catch(()=>{});
+
+  // Printer init
+  POSPrinter.init();
+
+  // Drawer manual button visibility
+  const drawerBtn = document.getElementById('drawerBtn');
+  if (drawerBtn && window.NEXAPOS?.drawerEnabled && window.NEXAPOS?.drawerManualBtn) {
+    drawerBtn.style.display = '';
+  }
 
   // Load products & categories - single init
   const origRender = POSProducts.render.bind(POSProducts);

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../bootstrap.php';
 Auth::requireAuth();
 $user    = Auth::user();
-$appName = Config::get('app.name', 'NexaPOS');
+$appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['value'] ?? Config::get('app.name', 'NexaPOS');
 ?>
 <!DOCTYPE html>
 <html lang="en">

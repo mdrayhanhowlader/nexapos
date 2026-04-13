@@ -7,6 +7,7 @@ $titles = [
   'customers.php' => 'Customers',
   'inventory.php' => 'Inventory',
   'purchases.php' => 'Purchases',
+  'suppliers.php' => 'Suppliers',
   'reports.php'   => 'Reports',
   'expenses.php'  => 'Expenses',
   'employees.php' => 'Employees',
