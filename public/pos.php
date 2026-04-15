@@ -12,6 +12,7 @@ $taxRate  = DB::fetch("SELECT value FROM settings WHERE `key`='tax_rate'")['valu
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<?php include __DIR__ . '/includes/pwa.php'; ?>
 <meta name="theme-color" content="#111827">
 <title>POS — <?= htmlspecialchars($appName) ?></title>
 <link rel="manifest" href="/nexapos/manifest.json">
