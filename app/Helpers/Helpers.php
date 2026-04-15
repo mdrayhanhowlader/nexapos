@@ -45,6 +45,23 @@ function generate_ref(string $prefix = 'REF'): string
     return $prefix . '-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -5));
 }
 
+/**
+ * Generate a valid EAN-13 barcode for internal store use.
+ * Prefix 200–209 is reserved by GS1 for in-store / variable-measure items.
+ */
+function generate_ean13(): string
+{
+    // 12 digits: prefix 200 + 9 random digits
+    $digits = '200' . str_pad((string)rand(0, 999999999), 9, '0', STR_PAD_LEFT);
+    // Calculate check digit
+    $sum = 0;
+    for ($i = 0; $i < 12; $i++) {
+        $sum += (int)$digits[$i] * ($i % 2 === 0 ? 1 : 3);
+    }
+    $check = (10 - ($sum % 10)) % 10;
+    return $digits . $check;
+}
+
 function customer_code(): string
 {
     return 'CUS-' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);

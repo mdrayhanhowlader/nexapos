@@ -224,8 +224,17 @@ tr:hover td{background:#fafafa}
         <div class="fg"><label>Category</label><select class="fc" id="fcat2"><option value="">— None —</option></select></div>
       </div>
       <div class="r3">
-        <div class="fg"><label>SKU</label><input class="fc" id="fsku" placeholder="Auto if blank"></div>
-        <div class="fg"><label>Barcode</label><input class="fc" id="fbc"></div>
+        <div class="fg">
+          <label>SKU <span style="font-weight:400;color:var(--t3);font-size:11px">— auto if blank</span></label>
+          <input class="fc" id="fsku" placeholder="e.g. ELE-00001">
+        </div>
+        <div class="fg">
+          <label>Barcode (EAN-13)</label>
+          <div style="display:flex;gap:6px">
+            <input class="fc" id="fbc" placeholder="Auto if blank" style="flex:1">
+            <button type="button" class="btn" style="padding:0 10px;font-size:18px;line-height:1;flex-shrink:0" title="Generate EAN-13 barcode" onclick="genBarcode()">⟳</button>
+          </div>
+        </div>
         <div class="fg"><label>Unit</label>
           <select class="fc" id="funit"><option value="pcs">pcs</option><option value="kg">kg</option><option value="g">g</option><option value="ltr">ltr</option><option value="ml">ml</option><option value="box">box</option><option value="pack">pack</option><option value="dozen">dozen</option></select>
         </div>
@@ -548,6 +557,21 @@ async function delCat(id){
   const fd=new FormData();fd.append('id',id);
   await fetch(`${API}?module=products&action=delete_category`,{method:'POST',body:fd});
   renderCats();loadCats();
+}
+
+// Generate EAN-13 barcode via API
+async function genBarcode() {
+  const btn = document.querySelector('[onclick="genBarcode()"]');
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const r = await fetch(`${API}?module=products&action=generate_barcode`);
+    const j = await r.json();
+    if (j.success) {
+      document.getElementById('fbc').value = j.data?.barcode ?? j.data;
+      toast('Barcode generated', 'success');
+    }
+  } catch(e) { toast('Failed to generate barcode', 'error'); }
+  finally { btn.textContent = '⟳'; btn.disabled = false; }
 }
 
 // Utils

@@ -147,6 +147,19 @@ switch ($action) {
                 DB::query("INSERT INTO inventory (product_id,variant_id,warehouse_id,quantity) VALUES (?,0,1,?) ON DUPLICATE KEY UPDATE quantity=?", [$id, $qty, $qty]);
                 DB::insert('stock_movements', ['product_id'=>$id,'warehouse_id'=>1,'user_id'=>Auth::id(),'type'=>'opening','quantity'=>$qty,'quantity_before'=>0,'quantity_after'=>$qty]);
             }
+            // Auto-generate SKU if not provided
+            if (empty($data['sku'])) {
+                $cat    = $data['category_id'] ? DB::fetch("SELECT name FROM categories WHERE id=?", [$data['category_id']]) : null;
+                $prefix = $cat ? strtoupper(substr(preg_replace('/[^a-zA-Z]/', '', $cat['name']), 0, 3)) : 'PRD';
+                $prefix = str_pad($prefix, 3, 'X');
+                DB::update('products', ['sku' => $prefix . '-' . str_pad($id, 5, '0', STR_PAD_LEFT)], 'id=?', [$id]);
+            }
+            // Auto-generate EAN-13 barcode if not provided
+            if (empty($data['barcode'])) {
+                do { $bc = generate_ean13(); }
+                while (DB::exists('products', 'barcode=?', [$bc]));
+                DB::update('products', ['barcode' => $bc], 'id=?', [$id]);
+            }
             log_activity('add_product', 'products', "Added: {$name}", $id);
         }
         $saved = DB::fetch("SELECT p.*, COALESCE(i.quantity,0) AS stock FROM products p LEFT JOIN inventory i ON i.product_id=p.id AND i.warehouse_id=1 WHERE p.id=?", [$id]);
@@ -259,9 +272,9 @@ switch ($action) {
         break;
 
     case 'generate_barcode':
-        do { $bc = str_pad(rand(1000000000000,9999999999999),13,'0'); }
+        do { $bc = generate_ean13(); }
         while (DB::exists('products','barcode=?',[$bc]));
-        Response::success(['barcode'=>$bc]);
+        Response::success(['barcode' => $bc]);
         break;
 
     default:
