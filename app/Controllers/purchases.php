@@ -87,7 +87,7 @@ switch ($action) {
             'note'            => trim($_POST['note']          ?? ''),
             'expected_date'   => $_POST['expected_date']  ?: null,
         ];
-        DB::transaction(function() use ($id, $data, $items) {
+        $savedId = DB::transaction(function() use ($id, $data, $items) {
             if ($id) {
                 DB::update('purchases', $data, 'id=?', [$id]);
                 DB::delete('purchase_items', 'purchase_id=?', [$id]);
@@ -108,8 +108,9 @@ switch ($action) {
                 ]);
             }
             log_activity('save_purchase', 'purchases', "Purchase #{$id}", $id);
-            Response::success(['id' => $id], 'Purchase saved');
+            return $id;
         });
+        Response::success(['id' => $savedId], 'Purchase saved');
         break;
 
     case 'receive':
@@ -155,8 +156,8 @@ switch ($action) {
                 'received_date' => date('Y-m-d'),
             ], 'id=?', [$id]);
             log_activity('receive_purchase', 'purchases', "Received purchase #{$id}", $id);
-            Response::success(null, 'Stock received successfully');
         });
+        Response::success(null, 'Stock received successfully');
         break;
 
     case 'delete':

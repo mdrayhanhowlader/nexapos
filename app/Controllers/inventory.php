@@ -126,8 +126,8 @@ switch ($action) {
                 'quantity'   => $qty, 'quantity_before' => $toQty, 'quantity_after' => $toQty + $qty,
                 'note'       => "Transfer from warehouse #{$from}",
             ]);
-            Response::success(null, 'Transfer completed');
         });
+        Response::success(null, 'Transfer completed');
         break;
 
     case 'warehouses':
