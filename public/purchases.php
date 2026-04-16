@@ -30,6 +30,15 @@ $appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['
 .po-total td:first-child{color:var(--text2)}
 .po-total td:last-child{text-align:right;font-weight:600}
 .po-total .grand td{font-size:15px;font-weight:700;color:var(--text1);border-top:2px solid var(--border);padding-top:10px}
+/* Product search dropdown */
+.prod-search-wrap{position:relative;flex:1;min-width:220px}
+.prod-dd{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:9999;max-height:300px;overflow-y:auto}
+.prod-dd-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;transition:background .1s}
+.prod-dd-item:hover{background:var(--accent-bg)}
+.prod-dd-item:last-child{border-bottom:none}
+.prod-dd-new{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;color:var(--accent);font-size:13px;font-weight:600;border-top:1.5px solid var(--border)}
+.prod-dd-new:hover{background:var(--accent-bg)}
+.prod-thumb{width:32px;height:32px;border-radius:5px;object-fit:cover;flex-shrink:0;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -146,9 +155,10 @@ $appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['
       <div style="margin-top:8px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <label style="font-size:13px;font-weight:600">Items *</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select class="filter-select" id="itemProdSel" style="min-width:200px"><option value="">— Add Product —</option></select>
-            <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="addItem()">+ Add</button>
+          <div class="prod-search-wrap" id="prodSearchWrap">
+            <input class="filter-select" id="prodSearch" placeholder="Search by name, SKU or barcode…"
+              oninput="filterProds(this.value)" onkeydown="prodSearchKey(event)" autocomplete="off" style="width:100%">
+            <div class="prod-dd" id="prodDropdown"></div>
           </div>
         </div>
         <table class="po-items">
@@ -192,11 +202,56 @@ $appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['
   </div>
 </div>
 
+<!-- Quick Add Product Modal -->
+<div class="modal-backdrop" id="quickProdModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <h3>Create New Product</h3>
+      <button class="modal-close" onclick="closeModal('quickProdModal')"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Product does not exist yet. Fill in the details to create it and add to this purchase.</p>
+      <div class="form-group">
+        <label>Product Name *</label>
+        <input class="form-control" id="qpName" placeholder="Enter product name">
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Cost Price (৳)</label>
+          <input class="form-control" id="qpCost" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Selling Price (৳)</label>
+          <input class="form-control" id="qpPrice" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Category</label>
+          <select class="form-control" id="qpCat"><option value="">— None —</option></select>
+        </div>
+        <div class="form-group">
+          <label>Unit</label>
+          <select class="form-control" id="qpUnit">
+            <option value="pcs">pcs</option><option value="kg">kg</option><option value="g">g</option>
+            <option value="ltr">ltr</option><option value="box">box</option><option value="pack">pack</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('quickProdModal')">Cancel</button>
+        <button class="btn btn-primary" id="qpSaveBtn" onclick="saveQuickProd()">Create &amp; Add to Purchase</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="assets/js/app.js"></script>
 <script>
 const API = '../routes/api.php';
+const IMGBASE = '/nexapos/public/uploads/products/';
 let currentPage = 1, totalPages = 1, saving = false;
-let items = [], products = [], suppliers = [];
+let items = [], products = [], suppliers = [], categories = [];
 
 const dbLoad = debounce(() => { currentPage=1; loadList(); }, 350);
 function debounceLoad() { dbLoad(); }
@@ -208,14 +263,20 @@ async function init() {
   // Load suppliers
   const sr = await api(`${API}?module=products&action=suppliers`);
   suppliers = sr.data || [];
-  const sel = document.getElementById('poSupplier');
-  sel.innerHTML = '<option value="">— Select Supplier —</option>' + suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  document.getElementById('poSupplier').innerHTML =
+    '<option value="">— Select Supplier —</option>' +
+    suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
 
-  // Load products for item selector
-  const pr = await api(`${API}?module=products&action=list&per_page=500&status=active`);
+  // Load products (all active, for search)
+  const pr = await api(`${API}?module=products&action=list&per_page=1000&status=active`);
   products = pr.data?.products || [];
-  const ps = document.getElementById('itemProdSel');
-  ps.innerHTML = '<option value="">— Add Product —</option>' + products.map(p=>`<option value="${p.id}">${p.name} (${p.sku||'—'})</option>`).join('');
+
+  // Load categories (for quick-add product form)
+  const cr = await api(`${API}?module=products&action=categories`);
+  categories = cr.data || [];
+  document.getElementById('qpCat').innerHTML =
+    '<option value="">— None —</option>' +
+    categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
 
   loadSummary();
   loadList();
@@ -276,17 +337,107 @@ async function loadList() {
   document.getElementById('pagination').style.display = totalPages > 1 ? 'flex' : 'none';
 }
 
-// Item management
-function addItem() {
-  const sel = document.getElementById('itemProdSel');
-  const id = sel.value; if (!id) return;
-  const prod = products.find(p=>p.id==id);
+// Product search dropdown
+function filterProds(q) {
+  q = (q || '').trim();
+  const dd = document.getElementById('prodDropdown');
+  if (!q) { dd.style.display = 'none'; return; }
+  const ql = q.toLowerCase();
+  const matches = products.filter(p =>
+    p.name?.toLowerCase().includes(ql) ||
+    (p.sku||'').toLowerCase().includes(ql) ||
+    (p.barcode||'').toLowerCase().includes(ql)
+  ).slice(0, 8);
+
+  dd.innerHTML = matches.map(p => {
+    const stock = parseFloat(p.stock || 0);
+    const stockStyle = stock <= 0 ? 'color:var(--red)' : stock <= (p.stock_alert_qty||5) ? 'color:var(--amber)' : 'color:#059669';
+    const img = p.image
+      ? `<img class="prod-thumb" src="${IMGBASE}${p.image}" onerror="this.src=''" alt="">`
+      : `<div class="prod-thumb"></div>`;
+    return `<div class="prod-dd-item" onmousedown="selectProd(${p.id})">
+      ${img}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${p.sku||'—'} &nbsp;·&nbsp; <span style="${stockStyle}">Stock: ${p.track_stock?stock:'∞'}</span></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">৳${parseFloat(p.cost_price||0).toFixed(2)}</div>
+    </div>`;
+  }).join('');
+
+  // "Create new product" option at bottom
+  const safeQ = q.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  dd.innerHTML += `<div class="prod-dd-new" onmousedown="openQuickAddProd('${safeQ}')">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;flex-shrink:0"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+    Create "${q}" as new product
+  </div>`;
+
+  dd.style.display = 'block';
+}
+
+function selectProd(id) {
+  const prod = products.find(p => p.id == id);
   if (!prod) return;
-  if (items.find(i=>i.product_id==id)) { toast('Product already added','warning'); return; }
-  items.push({ product_id: id, name: prod.name, quantity: 1, unit_cost: parseFloat(prod.cost_price||0), tax_rate: parseFloat(prod.tax_rate||0) });
-  sel.value = '';
+  document.getElementById('prodSearch').value = '';
+  document.getElementById('prodDropdown').style.display = 'none';
+  if (items.find(i => i.product_id == id)) { toast('Product already added', 'warning'); return; }
+  items.push({
+    product_id: id, name: prod.name, image: prod.image || null,
+    quantity: 1, unit_cost: parseFloat(prod.cost_price || 0), tax_rate: parseFloat(prod.tax_rate || 0)
+  });
   renderItems();
 }
+
+function prodSearchKey(e) {
+  if (e.key === 'Escape') {
+    document.getElementById('prodDropdown').style.display = 'none';
+    document.getElementById('prodSearch').value = '';
+  }
+}
+
+// Quick-add new product inline during purchase
+function openQuickAddProd(prefill) {
+  document.getElementById('qpName').value = prefill || '';
+  document.getElementById('qpCost').value = '';
+  document.getElementById('qpPrice').value = '';
+  document.getElementById('qpCat').value = '';
+  document.getElementById('qpUnit').value = 'pcs';
+  document.getElementById('prodSearch').value = '';
+  document.getElementById('prodDropdown').style.display = 'none';
+  document.getElementById('quickProdModal').classList.add('open');
+  setTimeout(() => document.getElementById('qpName').focus(), 100);
+}
+
+async function saveQuickProd() {
+  const name = document.getElementById('qpName').value.trim();
+  if (!name) { toast('Product name required', 'error'); return; }
+  const btn = document.getElementById('qpSaveBtn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  const fd = new FormData();
+  fd.append('name',          name);
+  fd.append('cost_price',    document.getElementById('qpCost').value  || 0);
+  fd.append('selling_price', document.getElementById('qpPrice').value || 0);
+  fd.append('category_id',   document.getElementById('qpCat').value   || '');
+  fd.append('unit',          document.getElementById('qpUnit').value);
+  const res = await apiFD(`${API}?module=products&action=save`, fd);
+  btn.disabled = false; btn.textContent = 'Create & Add to Purchase';
+  if (res.success) {
+    const p = res.data;
+    products.push(p);
+    closeModal('quickProdModal');
+    items.push({
+      product_id: p.id, name: p.name, image: p.image || null,
+      quantity: 1, unit_cost: parseFloat(p.cost_price || 0), tax_rate: parseFloat(p.tax_rate || 0)
+    });
+    renderItems();
+    toast(`"${p.name}" created & added`, 'success');
+  } else {
+    toast(res.message || 'Failed to create product', 'error');
+  }
+}
+
+// Legacy: keep addItem in case called elsewhere
+function addItem() {}
 
 function removeItem(idx) {
   items.splice(idx, 1);
@@ -296,18 +447,27 @@ function removeItem(idx) {
 function renderItems() {
   const tbody = document.getElementById('itemsBody');
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3);font-size:13px">No items added yet</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No items added yet — search above to add products</td></tr>`;
     calcTotal(); return;
   }
-  tbody.innerHTML = items.map((it, i) => `
-    <tr>
-      <td style="font-weight:500">${it.name}</td>
+  tbody.innerHTML = items.map((it, i) => {
+    const imgTag = it.image
+      ? `<img class="prod-thumb" src="${IMGBASE}${it.image}" onerror="this.src='';this.className='prod-thumb'" alt="">`
+      : `<div class="prod-thumb" style="display:inline-block"></div>`;
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${imgTag}
+          <span style="font-weight:500">${it.name}</span>
+        </div>
+      </td>
       <td><input type="number" min="1" step="1" value="${it.quantity}" oninput="items[${i}].quantity=parseFloat(this.value)||1;calcTotal()" style="width:80px"></td>
-      <td><input type="number" min="0" step="0.01" value="${it.unit_cost}" oninput="items[${i}].unit_cost=parseFloat(this.value)||0;calcTotal()" style="width:100px"></td>
+      <td><input type="number" min="0" step="0.01" value="${it.unit_cost.toFixed(2)}" oninput="items[${i}].unit_cost=parseFloat(this.value)||0;calcTotal()" style="width:100px"></td>
       <td><input type="number" min="0" step="0.5" value="${it.tax_rate}" oninput="items[${i}].tax_rate=parseFloat(this.value)||0;calcTotal()" style="width:70px"></td>
       <td id="sub${i}" style="font-weight:600">${fmt(it.quantity*it.unit_cost)}</td>
       <td><button class="rm-row" onclick="removeItem(${i})"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   calcTotal();
 }
 
@@ -433,6 +593,19 @@ async function cancelPO(id) {
 
 document.getElementById('poModal').addEventListener('click', e => { if(e.target===e.currentTarget) closeModal('poModal'); });
 document.getElementById('viewModal').addEventListener('click', e => { if(e.target===e.currentTarget) closeModal('viewModal'); });
+document.getElementById('quickProdModal').addEventListener('click', e => { if(e.target===e.currentTarget) closeModal('quickProdModal'); });
+
+// Close product search dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!document.getElementById('prodSearchWrap').contains(e.target)) {
+    document.getElementById('prodDropdown').style.display = 'none';
+  }
+});
+
+// Enter key in quick prod form
+document.getElementById('quickProdModal').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.tagName !== 'SELECT') { e.preventDefault(); saveQuickProd(); }
+});
 
 init();
 </script>

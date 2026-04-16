@@ -23,7 +23,8 @@ switch ($action) {
         )['n'];
         $pg   = paginate($total, $page, $perPage);
         $rows = DB::fetchAll(
-            "SELECT p.*, s.name AS supplier_name, u.name AS user_name
+            "SELECT p.*, s.name AS supplier_name, u.name AS user_name,
+                    (SELECT COUNT(*) FROM purchase_items WHERE purchase_id=p.id) AS item_count
              FROM purchases p
              LEFT JOIN suppliers s ON s.id=p.supplier_id
              LEFT JOIN users u     ON u.id=p.user_id
