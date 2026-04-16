@@ -583,12 +583,18 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
         <span style="font-size:22px;font-weight:700;color:var(--accent)" id="payTotalDisp">৳0.00</span>
       </div>
       <div class="pay-grid" id="payGrid"></div>
+      <!-- Merchant info: shown when bKash/Nagad/Card/Bank selected -->
+      <div id="payMerchantInfo" style="display:none;margin:10px 0;padding:14px 16px;background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px" id="payMerchantLabel">Send to</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text1);letter-spacing:1px" id="payMerchantNumber"></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px" id="payMerchantInstructions"></div>
+      </div>
       <div id="payRefArea" style="display:none" class="fg">
         <label>Reference / Transaction ID</label>
         <input type="text" class="fc" id="payRefInp" placeholder="e.g. TXN123456">
       </div>
       <div id="payMobileArea" style="display:none" class="fg">
-        <label>Mobile Number</label>
+        <label>Customer Mobile (optional)</label>
         <input type="text" class="fc" id="payMobileInp" placeholder="01XXXXXXXXX">
       </div>
       <div class="fg">

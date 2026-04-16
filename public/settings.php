@@ -442,6 +442,27 @@ input[type=file]{display:none}
             </p>
           </div>
         </div>
+
+        <!-- Payment Method Account Numbers -->
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-ico" style="background:#0369a1"><svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg></div>
+            <div>
+              <h3>Payment Method Setup</h3>
+              <p>Account numbers & instructions shown to customers at checkout</p>
+            </div>
+          </div>
+          <div class="s-card-body">
+            <p style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6">
+              Enter your <strong>merchant numbers</strong> for bKash/Nagad/Rocket so cashiers can tell customers where to send money.
+              For <strong>card payment</strong>, add instructions (e.g. "Use Visa/Mastercard terminal on counter").
+              For <strong>bank transfer</strong>, enter your bank account number.
+            </p>
+            <div id="pmList" style="display:flex;flex-direction:column;gap:16px">
+              <div style="text-align:center;padding:20px;color:var(--text3)">Loading…</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ══ TAX & CURRENCY ══ -->
@@ -780,8 +801,82 @@ function toast(msg, type='info', dur=3000) {
   }, dur);
 }
 
+// ── Payment Methods ──────────────────────────────
+const PM_ICONS = {
+  cash:          '💵',
+  mobile_banking:'📱',
+  card:          '💳',
+  bank_transfer: '🏦',
+  credit:        '⭐',
+  other:         '💰',
+};
+const PM_PLACEHOLDERS = {
+  mobile_banking: '01XXXXXXXXX (merchant number)',
+  card:           'e.g. Visa, Mastercard accepted',
+  bank_transfer:  'Bank name + Account: XXXXXXXX',
+  cash:           '',
+  credit:         '',
+  other:          '',
+};
+
+async function loadPaymentMethods() {
+  const res = await fetch(`../routes/api.php?module=settings&action=get_payment_methods`).then(r => r.json());
+  const methods = res.data || [];
+  const list = document.getElementById('pmList');
+  if (!list) return;
+  list.innerHTML = methods.map(m => `
+    <div style="border:1.5px solid var(--border);border-radius:10px;padding:16px;background:#fff" id="pmCard_${m.id}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:20px">${PM_ICONS[m.type]||'💰'}</span>
+        <span style="font-size:14px;font-weight:700;flex:1">${m.name}</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="pmActive_${m.id}" ${m.is_active?'checked':''}>
+          Active
+        </label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">
+            ${m.type==='mobile_banking'?'Merchant Number':m.type==='card'?'Accepted Cards':m.type==='bank_transfer'?'Account Details':'Account / Reference'}
+          </label>
+          <input type="text" id="pmNum_${m.id}"
+            value="${m.account_number||''}"
+            placeholder="${PM_PLACEHOLDERS[m.type]||'Optional'}"
+            style="width:100%;height:36px;padding:0 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;outline:none"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Instructions for cashier</label>
+          <input type="text" id="pmInst_${m.id}"
+            value="${m.instructions||''}"
+            placeholder="Shown at checkout (optional)"
+            style="width:100%;height:36px;padding:0 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;outline:none"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+      </div>
+      <div style="margin-top:10px;text-align:right">
+        <button onclick="savePM(${m.id})"
+          style="padding:6px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+          Save
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function savePM(id) {
+  const fd = new FormData();
+  fd.append('id',             id);
+  fd.append('account_number', document.getElementById(`pmNum_${id}`).value.trim());
+  fd.append('instructions',   document.getElementById(`pmInst_${id}`).value.trim());
+  fd.append('is_active',      document.getElementById(`pmActive_${id}`).checked ? 1 : 0);
+  const res = await fetch('../routes/api.php?module=settings&action=save_payment_method', { method:'POST', body:fd }).then(r=>r.json());
+  if (res.success) toast('Saved', 'ok');
+  else toast(res.message || 'Error', 'err');
+}
+
 // Init
 loadSettings();
+loadPaymentMethods();
 </script>
 </div><!-- /.sb-main -->
 </body>

@@ -64,14 +64,51 @@ const POSPayment = {
 
     this.updateChange();
 
-    // Show/hide reference fields
+    // Show/hide reference + mobile fields
     const refArea    = document.getElementById('payRefArea');
     const mobileArea = document.getElementById('payMobileArea');
-    if (refArea) {
-      refArea.style.display = method.type !== 'cash' ? 'block' : 'none';
-    }
-    if (mobileArea) {
-      mobileArea.style.display = method.type === 'mobile_banking' ? 'block' : 'none';
+    if (refArea)    refArea.style.display    = method.type !== 'cash' ? 'block' : 'none';
+    if (mobileArea) mobileArea.style.display = method.type === 'mobile_banking' ? 'block' : 'none';
+
+    // Show merchant account info
+    const infoBox  = document.getElementById('payMerchantInfo');
+    const numEl    = document.getElementById('payMerchantNumber');
+    const lblEl    = document.getElementById('payMerchantLabel');
+    const instEl   = document.getElementById('payMerchantInstructions');
+    if (!infoBox) return;
+
+    if (method.type === 'cash') {
+      infoBox.style.display = 'none';
+    } else if (method.account_number) {
+      const labels = {
+        mobile_banking: `Customer sends to (${method.name})`,
+        bank_transfer:  'Bank Account',
+        card:           'Card Reference',
+      };
+      lblEl.textContent  = labels[method.type] || method.name;
+      numEl.textContent  = method.account_number;
+      instEl.textContent = method.instructions || '';
+      infoBox.style.borderColor = method.color || 'var(--accent)';
+      infoBox.style.background  = method.color ? method.color + '15' : 'var(--accent-bg)';
+      lblEl.style.color         = method.color || 'var(--accent)';
+      infoBox.style.display     = 'block';
+    } else if (method.type === 'card') {
+      lblEl.textContent  = 'Card Payment';
+      numEl.textContent  = 'Use physical card terminal';
+      instEl.textContent = method.instructions || 'Swipe / tap card on terminal, then enter transaction ID above';
+      infoBox.style.borderColor = '#2563eb';
+      infoBox.style.background  = '#eff6ff';
+      lblEl.style.color         = '#2563eb';
+      infoBox.style.display     = 'block';
+    } else {
+      // No account number set — show a hint to configure
+      lblEl.textContent  = method.name;
+      numEl.textContent  = method.instructions || 'No account number configured';
+      instEl.textContent = method.instructions ? '' : 'Go to Settings → Payment to add merchant number';
+      infoBox.style.borderColor = 'var(--border)';
+      infoBox.style.background  = 'var(--bg)';
+      lblEl.style.color         = 'var(--text2)';
+      infoBox.style.display     = 'block';
     }
   },
 

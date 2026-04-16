@@ -93,6 +93,33 @@ switch ($action) {
     Response::success(null, 'Settings saved successfully');
     break;
 
+  case 'get_payment_methods':
+    Response::success(DB::fetchAll(
+        "SELECT id, name, slug, type, color, account_number, instructions, charge_rate, cash_drawer, is_active, sort_order
+         FROM payment_methods ORDER BY sort_order"
+    ));
+    break;
+
+  case 'save_payment_method':
+    $id             = (int)($_POST['id'] ?? 0);
+    $accountNumber  = trim($_POST['account_number'] ?? '');
+    $instructions   = trim($_POST['instructions']   ?? '');
+    $isActive       = isset($_POST['is_active']) ? (int)$_POST['is_active'] : 1;
+    $chargeRate     = (float)($_POST['charge_rate'] ?? 0);
+    if (!$id) Response::error('Invalid payment method ID');
+    DB::update('payment_methods', [
+        'account_number' => $accountNumber ?: null,
+        'instructions'   => $instructions  ?: null,
+        'charge_rate'    => $chargeRate,
+        'is_active'      => $isActive,
+    ], 'id=?', [$id]);
+    log_activity('settings_updated', 'settings', "Payment method #{$id} updated");
+    Response::success(
+        DB::fetch("SELECT * FROM payment_methods WHERE id=?", [$id]),
+        'Payment method saved'
+    );
+    break;
+
   default:
     Response::error("Unknown action: {$action}", 404);
 }
