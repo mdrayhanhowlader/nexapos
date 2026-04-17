@@ -93,6 +93,22 @@ switch ($action) {
     Response::success(null, 'Settings saved successfully');
     break;
 
+  case 'change_password':
+    $current    = trim($_POST['current_password'] ?? '');
+    $newPass    = trim($_POST['new_password']     ?? '');
+    $confirm    = trim($_POST['confirm_password'] ?? '');
+    if (!$current || !$newPass) Response::error('All fields are required');
+    if (strlen($newPass) < 6)   Response::error('New password must be at least 6 characters');
+    if ($newPass !== $confirm)  Response::error('New passwords do not match');
+    $user = DB::fetch("SELECT password FROM users WHERE id=?", [Auth::id()]);
+    if (!$user || !password_verify($current, $user['password'])) {
+        Response::error('Current password is incorrect');
+    }
+    DB::update('users', ['password' => password_hash($newPass, PASSWORD_BCRYPT)], 'id=?', [Auth::id()]);
+    log_activity('change_password', 'settings', 'User changed their own password');
+    Response::success(null, 'Password changed successfully');
+    break;
+
   case 'get_payment_methods':
     Response::success(DB::fetchAll(
         "SELECT id, name, slug, type, color, account_number, instructions, charge_rate, cash_drawer, is_active, sort_order

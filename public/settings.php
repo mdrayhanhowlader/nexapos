@@ -230,6 +230,10 @@ input[type=file]{display:none}
         <svg viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
         Branding
       </div>
+      <div class="stab" onclick="switchTab('security')">
+        <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+        Security
+      </div>
     </div>
 
     <!-- Settings panels -->
@@ -601,6 +605,75 @@ input[type=file]{display:none}
         </div>
       </div>
 
+      <!-- ══ SECURITY ══ -->
+      <div class="s-panel" id="panel-security">
+
+        <!-- Change own password -->
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-ico" style="background:#7c3aed"><svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg></div>
+            <div><h3>Change Password</h3><p>Update your own login password</p></div>
+          </div>
+          <div class="s-card-body" style="max-width:420px">
+            <div class="form-group" style="margin-bottom:14px">
+              <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Current Password</label>
+              <div style="position:relative">
+                <input type="password" id="cpCurrent" class="form-control" placeholder="Enter current password" autocomplete="current-password">
+                <button type="button" onclick="togglePw('cpCurrent',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3)">
+                  <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:14px">
+              <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">New Password <span style="font-weight:400;color:var(--text3)">(min 6 characters)</span></label>
+              <div style="position:relative">
+                <input type="password" id="cpNew" class="form-control" placeholder="Enter new password" autocomplete="new-password" oninput="checkPwStrength(this.value)">
+                <button type="button" onclick="togglePw('cpNew',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3)">
+                  <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                </button>
+              </div>
+              <!-- Strength bar -->
+              <div style="margin-top:6px;height:4px;border-radius:4px;background:var(--border);overflow:hidden">
+                <div id="pwStrengthBar" style="height:100%;width:0;transition:width .3s,background .3s;border-radius:4px"></div>
+              </div>
+              <div id="pwStrengthLabel" style="font-size:11px;color:var(--text3);margin-top:3px"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:20px">
+              <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Confirm New Password</label>
+              <input type="password" id="cpConfirm" class="form-control" placeholder="Re-enter new password" autocomplete="new-password">
+            </div>
+            <button class="btn btn-primary" id="cpBtn" onclick="changePassword()">
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#fff;margin-right:4px"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              Update Password
+            </button>
+          </div>
+        </div>
+
+        <!-- Admin: reset other user's password -->
+        <?php if (Auth::can('all') || Auth::can('employees')): ?>
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-ico" style="background:#dc2626"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></div>
+            <div><h3>Reset User Password</h3><p>Admin only — reset any user's password without knowing their current one</p></div>
+          </div>
+          <div class="s-card-body" style="max-width:420px">
+            <div class="form-group" style="margin-bottom:14px">
+              <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Select User</label>
+              <select class="form-control" id="rpUser"></select>
+            </div>
+            <div class="form-group" style="margin-bottom:20px">
+              <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">New Password</label>
+              <input type="password" id="rpPass" class="form-control" placeholder="Min 6 characters" autocomplete="new-password">
+            </div>
+            <button class="btn" style="background:#dc2626;color:#fff" id="rpBtn" onclick="resetUserPassword()">
+              Reset Password
+            </button>
+          </div>
+        </div>
+        <?php endif; ?>
+
+      </div><!-- /panel-security -->
+
     </div><!-- /#settingsBody -->
   </div><!-- /#content -->
 </div><!-- /#main -->
@@ -874,9 +947,90 @@ async function savePM(id) {
   else toast(res.message || 'Error', 'err');
 }
 
+// ── Security ──────────────────────────────────────
+function togglePw(id, btn) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function checkPwStrength(pw) {
+  const bar = document.getElementById('pwStrengthBar');
+  const lbl = document.getElementById('pwStrengthLabel');
+  if (!bar) return;
+  let score = 0;
+  if (pw.length >= 6)  score++;
+  if (pw.length >= 10) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const levels = [
+    { w:'0%',   bg:'transparent', t:'' },
+    { w:'25%',  bg:'#ef4444', t:'Weak' },
+    { w:'50%',  bg:'#f59e0b', t:'Fair' },
+    { w:'75%',  bg:'#3b82f6', t:'Good' },
+    { w:'100%', bg:'#10b981', t:'Strong' },
+  ];
+  const lv = levels[Math.min(score, 4)];
+  bar.style.width = lv.w; bar.style.background = lv.bg;
+  lbl.textContent = lv.t; lbl.style.color = lv.bg;
+}
+
+async function changePassword() {
+  const current = document.getElementById('cpCurrent').value.trim();
+  const newPw   = document.getElementById('cpNew').value.trim();
+  const confirm = document.getElementById('cpConfirm').value.trim();
+  if (!current || !newPw || !confirm) { toast('All fields are required', 'error'); return; }
+  if (newPw !== confirm) { toast('New passwords do not match', 'error'); return; }
+  if (newPw.length < 6)  { toast('Password must be at least 6 characters', 'error'); return; }
+  const btn = document.getElementById('cpBtn');
+  btn.disabled = true; btn.textContent = 'Updating…';
+  const fd = new FormData();
+  fd.append('current_password', current);
+  fd.append('new_password',     newPw);
+  fd.append('confirm_password', confirm);
+  const res = await fetch('../routes/api.php?module=settings&action=change_password', { method:'POST', body:fd }).then(r=>r.json());
+  btn.disabled = false; btn.textContent = 'Update Password';
+  if (res.success) {
+    toast('Password changed successfully', 'success');
+    document.getElementById('cpCurrent').value = '';
+    document.getElementById('cpNew').value     = '';
+    document.getElementById('cpConfirm').value = '';
+    document.getElementById('pwStrengthBar').style.width = '0';
+    document.getElementById('pwStrengthLabel').textContent = '';
+  } else {
+    toast(res.message || 'Failed to change password', 'error');
+  }
+}
+
+async function loadSecurityUsers() {
+  const sel = document.getElementById('rpUser');
+  if (!sel) return;
+  const res = await fetch('../routes/api.php?module=employees&action=list&per_page=100').then(r=>r.json());
+  const users = res.data?.employees || [];
+  sel.innerHTML = '<option value="">— Select user —</option>' +
+    users.map(u => `<option value="${u.id}">${u.name} (${u.role_name||u.role_slug||''})</option>`).join('');
+}
+
+async function resetUserPassword() {
+  const uid  = document.getElementById('rpUser').value;
+  const pass = document.getElementById('rpPass').value.trim();
+  if (!uid)          { toast('Select a user', 'error'); return; }
+  if (pass.length<6) { toast('Password min 6 characters', 'error'); return; }
+  if (!confirm(`Reset password for this user?`)) return;
+  const btn = document.getElementById('rpBtn');
+  btn.disabled = true; btn.textContent = 'Resetting…';
+  const fd = new FormData();
+  fd.append('id', uid); fd.append('password', pass);
+  const res = await fetch('../routes/api.php?module=employees&action=reset_password', { method:'POST', body:fd }).then(r=>r.json());
+  btn.disabled = false; btn.textContent = 'Reset Password';
+  if (res.success) { toast('Password reset successfully', 'success'); document.getElementById('rpPass').value=''; }
+  else toast(res.message || 'Failed', 'error');
+}
+
 // Init
 loadSettings();
 loadPaymentMethods();
+loadSecurityUsers();
 </script>
 </div><!-- /.sb-main -->
 </body>
