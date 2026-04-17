@@ -4,6 +4,7 @@ $titles = [
   'products.php'  => 'Products',
   'categories.php'=> 'Categories',
   'orders.php'    => 'Orders',
+  'returns.php'   => 'Returns & Refunds',
   'customers.php' => 'Customers',
   'inventory.php' => 'Inventory',
   'purchases.php' => 'Purchases',
