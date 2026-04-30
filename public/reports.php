@@ -52,6 +52,10 @@ canvas{max-height:300px}
         <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
         Refresh
       </button>
+      <button class="btn" id="exportBtn" onclick="exportCSV()" style="background:#fff;border:1.5px solid var(--border);color:var(--text2);display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        Export CSV
+      </button>
     </div>
   </div>
 
@@ -63,6 +67,7 @@ canvas{max-height:300px}
     <div class="tab" data-tab="inventory" onclick="switchTab('inventory')">Inventory Value</div>
     <div class="tab" data-tab="customers" onclick="switchTab('customers')">Customers</div>
     <div class="tab" data-tab="cashier" onclick="switchTab('cashier')">Cashier</div>
+    <div class="tab" data-tab="shifts" onclick="switchTab('shifts')">Shifts</div>
   </div>
 
   <!-- Sales Summary -->
@@ -141,6 +146,30 @@ canvas{max-height:300px}
     </div>
   </div>
 
+  <div class="tab-panel" id="panel-shifts">
+    <div class="table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cashier</th>
+              <th>Opened At</th>
+              <th>Closed At</th>
+              <th>Duration</th>
+              <th>Opening Cash</th>
+              <th>Total Sales</th>
+              <th>Expected Cash</th>
+              <th>Actual Cash</th>
+              <th>Difference</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="shiftsBody"><tr><td colspan="10" class="tbl-loading"><div class="spin"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 </div>
 
@@ -150,6 +179,7 @@ canvas{max-height:300px}
 const API = '../routes/api.php';
 let salesChart = null;
 let activeTab = 'sales';
+let csvData = { tab: '', rows: [], cols: [] }; // for CSV export
 
 // Default date range: this month
 (function() {
@@ -179,6 +209,24 @@ async function loadTab(tab) {
   else if (tab === 'inventory') await loadInventory();
   else if (tab === 'customers') await loadCustReport(from, to);
   else if (tab === 'cashier') await loadCashier(from, to);
+  else if (tab === 'shifts')  await loadShifts(from, to);
+}
+
+function exportCSV() {
+  if (!csvData.rows.length) { toast('No data to export', 'warning'); return; }
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [csvData.cols.map(c => esc(c.label)).join(',')];
+  csvData.rows.forEach(r => {
+    lines.push(csvData.cols.map(c => esc(r[c.key] ?? '')).join(','));
+  });
+  const from = document.getElementById('fromDate').value;
+  const to   = document.getElementById('toDate').value;
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `${csvData.tab}_${from}_${to}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 async function loadSales(from, to) {
@@ -193,6 +241,11 @@ async function loadSales(from, to) {
   document.getElementById('sk6').textContent = fmt(s.total_tax);
 
   const daily = res.data.daily || [];
+  csvData = {
+    tab: 'sales_daily',
+    rows: daily,
+    cols: [{key:'date',label:'Date'},{key:'revenue',label:'Revenue'},{key:'orders',label:'Orders'}]
+  };
   if (salesChart) salesChart.destroy();
   const ctx = document.getElementById('salesChart').getContext('2d');
   salesChart = new Chart(ctx, {
@@ -216,6 +269,11 @@ async function loadSales(from, to) {
 async function loadTopProducts(from, to) {
   const res = await api(`${API}?module=reports&action=top_products&from=${from}&to=${to}&limit=20`);
   const rows = res.data || [];
+  csvData = {
+    tab: 'top_products',
+    rows,
+    cols: [{key:'name',label:'Product'},{key:'qty_sold',label:'Qty Sold'},{key:'revenue',label:'Revenue'},{key:'orders',label:'Orders'}]
+  };
   document.getElementById('topProdsBody').innerHTML = rows.length
     ? rows.map((r,i) => `<tr>
         <td style="font-weight:700;color:var(--text3)">${i+1}</td>
@@ -231,6 +289,11 @@ async function loadPL(from, to) {
   const res = await api(`${API}?module=reports&action=profit_loss&from=${from}&to=${to}`);
   if (!res.success) { document.getElementById('plBody').innerHTML = '<p style="color:var(--red)">Failed to load</p>'; return; }
   const d = res.data;
+  csvData = {
+    tab: 'profit_loss',
+    rows: [{label:'Revenue',value:d.revenue},{label:'COGS',value:d.cogs},{label:'Refunds',value:d.refunds},{label:'Gross Profit',value:d.grossProfit},{label:'Expenses',value:d.expenses},{label:'Net Profit',value:d.netProfit}],
+    cols: [{key:'label',label:'Item'},{key:'value',label:'Amount'}]
+  };
   const gColor = parseFloat(d.grossProfit)>=0 ? '#059669' : 'var(--red)';
   const nColor = parseFloat(d.netProfit)>=0 ? '#059669' : 'var(--red)';
   document.getElementById('plBody').innerHTML = `
@@ -247,6 +310,11 @@ async function loadInventory() {
   const res = await api(`${API}?module=reports&action=inventory_value`);
   if (!res.success) return;
   const { items, totals } = res.data;
+  csvData = {
+    tab: 'inventory',
+    rows: items,
+    cols: [{key:'name',label:'Product'},{key:'sku',label:'SKU'},{key:'category',label:'Category'},{key:'stock',label:'Stock'},{key:'cost_value',label:'Cost Value'},{key:'retail_value',label:'Retail Value'}]
+  };
   document.getElementById('iv1').textContent = fmt(totals.cost_total);
   document.getElementById('iv2').textContent = fmt(totals.retail_total);
   document.getElementById('invBody').innerHTML = items.length
@@ -264,6 +332,11 @@ async function loadInventory() {
 async function loadCustReport(from, to) {
   const res = await api(`${API}?module=reports&action=customer_report&from=${from}&to=${to}`);
   const rows = res.data || [];
+  csvData = {
+    tab: 'customers',
+    rows,
+    cols: [{key:'name',label:'Customer'},{key:'phone',label:'Phone'},{key:'group',label:'Group'},{key:'orders',label:'Orders'},{key:'spent',label:'Total Spent'},{key:'last_visit',label:'Last Visit'}]
+  };
   const gc = { regular:'badge-blue', vip:'badge-purple', wholesale:'badge-green' };
   document.getElementById('custRepBody').innerHTML = rows.length
     ? rows.map(r => `<tr>
@@ -280,6 +353,11 @@ async function loadCustReport(from, to) {
 async function loadCashier(from, to) {
   const res = await api(`${API}?module=reports&action=cashier_report&from=${from}&to=${to}`);
   const rows = res.data || [];
+  csvData = {
+    tab: 'cashier',
+    rows,
+    cols: [{key:'cashier',label:'Cashier'},{key:'orders',label:'Orders'},{key:'revenue',label:'Revenue'},{key:'discounts',label:'Discounts'}]
+  };
   document.getElementById('cashierBody').innerHTML = rows.length
     ? rows.map(r => `<tr>
         <td style="font-weight:600;color:var(--text1)">${r.cashier}</td>
@@ -288,6 +366,54 @@ async function loadCashier(from, to) {
         <td style="color:var(--red)">${fmt(r.discounts)}</td>
       </tr>`).join('')
     : `<tr><td colspan="4" class="tbl-empty">No data in this period</td></tr>`;
+}
+
+async function loadShifts(from, to) {
+  const res  = await api(`${API}?module=pos&action=get_shift_history&from=${from}&to=${to}`);
+  const rows = res.data?.rows || [];
+  csvData = {
+    tab: 'shifts',
+    rows,
+    cols: [
+      {key:'cashier_name', label:'Cashier'},
+      {key:'opened_at',    label:'Opened At'},
+      {key:'closed_at',    label:'Closed At'},
+      {key:'opening_balance', label:'Opening Cash'},
+      {key:'total_sales',     label:'Total Sales'},
+      {key:'expected_balance',label:'Expected Cash'},
+      {key:'closing_balance', label:'Actual Cash'},
+      {key:'difference',      label:'Difference'},
+      {key:'status',          label:'Status'},
+    ]
+  };
+  const tbody = document.getElementById('shiftsBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="10" class="tbl-empty">No shifts in this period</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const openDt  = new Date(r.opened_at);
+    const closeDt = r.closed_at ? new Date(r.closed_at) : null;
+    const durMs   = closeDt ? closeDt - openDt : Date.now() - openDt;
+    const durMins = Math.floor(durMs / 60000);
+    const dur     = durMins < 60 ? durMins + 'm' : Math.floor(durMins/60) + 'h ' + (durMins%60) + 'm';
+    const diff    = parseFloat(r.difference || 0);
+    const diffClr = diff < 0 ? 'var(--red)' : diff > 0 ? 'var(--green)' : 'var(--text2)';
+    const stBg    = r.status === 'open' ? '#dcfce7' : '#f1f5f9';
+    const stClr   = r.status === 'open' ? '#16a34a' : '#64748b';
+    return `<tr>
+      <td style="font-weight:600">${r.cashier_name}</td>
+      <td style="font-size:12px">${openDt.toLocaleString()}</td>
+      <td style="font-size:12px">${closeDt ? closeDt.toLocaleString() : '—'}</td>
+      <td style="font-size:12px;color:var(--text2)">${dur}</td>
+      <td>${fmt(r.opening_balance)}</td>
+      <td style="font-weight:700;color:var(--green)">${fmt(r.total_sales)}</td>
+      <td>${fmt(r.expected_balance || 0)}</td>
+      <td>${r.closing_balance != null ? fmt(r.closing_balance) : '—'}</td>
+      <td style="font-weight:600;color:${diffClr}">${r.closing_balance != null ? (diff >= 0 ? '+' : '') + fmt(diff) : '—'}</td>
+      <td><span style="background:${stBg};color:${stClr};padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;text-transform:capitalize">${r.status}</span></td>
+    </tr>`;
+  }).join('');
 }
 
 loadTab('sales');

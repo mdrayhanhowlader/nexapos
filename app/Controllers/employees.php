@@ -111,6 +111,27 @@ switch ($action) {
         Response::success(DB::fetchAll("SELECT * FROM roles ORDER BY id"));
         break;
 
+    case 'save_role_perms':
+        Auth::requirePermission('employees');
+        $roleId = (int)($_POST['role_id'] ?? 0);
+        $permsJson = trim($_POST['permissions'] ?? '{}');
+        if (!$roleId) Response::error('Role ID required');
+        $perms = json_decode($permsJson, true);
+        if (!is_array($perms)) Response::error('Invalid permissions data');
+        // Sanitise — only allow known permission keys
+        $allowed = ['all','pos','products','inventory','orders','customers','reports',
+                    'expenses','purchases','suppliers','returns','employees','settings'];
+        $clean = [];
+        foreach ($allowed as $k) {
+            if (!empty($perms[$k])) $clean[$k] = true;
+        }
+        $role = DB::fetch("SELECT id FROM roles WHERE id=?", [$roleId]);
+        if (!$role) Response::error('Role not found', 404);
+        DB::update('roles', ['permissions' => json_encode($clean)], 'id=?', [$roleId]);
+        log_activity('update_role_perms', 'roles', "Updated permissions for role #{$roleId}", $roleId);
+        Response::success(null, 'Permissions updated');
+        break;
+
     case 'reset_password':
         Auth::requirePermission('employees');
         $id       = (int)($_POST['id']       ?? 0);
@@ -119,6 +140,28 @@ switch ($action) {
         DB::update('users', ['password' => password_hash($password, PASSWORD_BCRYPT)], 'id=?', [$id]);
         log_activity('reset_password', 'employees', "Password reset for user #{$id}", $id);
         Response::success(null, 'Password reset successfully');
+        break;
+
+    case 'set_pin':
+        Auth::requirePermission('employees');
+        $id  = (int)($_POST['id']  ?? 0);
+        $pin = trim($_POST['pin'] ?? '');
+        if (!$id) Response::error('User ID required');
+        if (!preg_match('/^\d{4,6}$/', $pin)) Response::error('PIN must be 4–6 digits');
+        // Check uniqueness
+        $existing = DB::fetch("SELECT id FROM users WHERE pin=? AND id!=?", [$pin, $id]);
+        if ($existing) Response::error('This PIN is already used by another user');
+        DB::update('users', ['pin' => $pin], 'id=?', [$id]);
+        log_activity('set_pin', 'employees', "PIN set for user #{$id}", $id);
+        Response::success(null, 'PIN set successfully');
+        break;
+
+    case 'clear_pin':
+        Auth::requirePermission('employees');
+        $id = (int)($_POST['id'] ?? 0);
+        if (!$id) Response::error('User ID required');
+        DB::update('users', ['pin' => null], 'id=?', [$id]);
+        Response::success(null, 'PIN cleared');
         break;
 
     case 'activity':

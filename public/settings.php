@@ -377,6 +377,63 @@ input[type=file]{display:none}
                 <span class="toggle-slider"></span>
               </label>
             </div>
+            <!-- Hardware test buttons -->
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+              <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Hardware Test</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button type="button" class="btn btn-secondary" style="gap:6px;font-size:13px" onclick="hwTestPrint()">
+                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                  Test Print
+                </button>
+                <button type="button" class="btn btn-secondary" style="gap:6px;font-size:13px" onclick="hwTestDrawer()">
+                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-1 11H5V10h14v8zM7 15h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zM3 5h18V3H3z"/></svg>
+                  Test Drawer
+                </button>
+              </div>
+              <div id="hwTestResult" style="display:none;margin-top:10px;padding:8px 12px;border-radius:8px;font-size:13px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barcode Scanner -->
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-ico" style="background:#0e7490"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 4h2v16H2zm3 0h1v16H5zm2 0h2v16H7zm3 0h1v16h-1zm3 0h2v16h-2zm3 0h1v16h-1zm2 0h2v16h-2zM1 3v18h22V3H1zm20 16H3V5h18v14z"/></svg></div>
+            <div><h3>Barcode Scanner</h3><p>Configure how barcodes are read in the POS</p></div>
+          </div>
+          <div class="s-card-body">
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <div class="toggle-title">Auto-Scan Mode</div>
+                <div class="toggle-desc">USB/Bluetooth scanner adds items to cart automatically when barcode is scanned</div>
+              </div>
+              <label class="toggle-wrap">
+                <input type="checkbox" name="barcode_auto_scan" id="s_barcode_auto_scan" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <div class="toggle-title">Manual Entry Mode</div>
+                <div class="toggle-desc">Allow typing barcode/SKU/name in the search box to add products</div>
+              </div>
+              <label class="toggle-wrap">
+                <input type="checkbox" name="barcode_manual_entry" id="s_barcode_manual_entry" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <!-- Scanner test -->
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+              <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Scanner Test</div>
+              <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Click "Start Test", then scan a barcode — the result will appear below.</div>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button type="button" class="btn btn-secondary" style="font-size:13px" id="scanTestBtn" onclick="toggleScanTest()">Start Scanner Test</button>
+                <div id="scanTestStatus" style="font-size:12px;color:var(--text2)"></div>
+              </div>
+              <div id="scanTestOutput" style="display:none;margin-top:10px;padding:10px 14px;background:var(--bg);
+                   border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:15px;letter-spacing:1px;
+                   min-height:36px;color:var(--accent)">Waiting for scan…</div>
+            </div>
           </div>
         </div>
       </div>
@@ -467,20 +524,137 @@ input[type=file]{display:none}
             </div>
           </div>
         </div>
+
+        <!-- MFS API Integration -->
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-ico" style="background:#e91e63"><svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg></div>
+            <div>
+              <h3>MFS API Integration</h3>
+              <p>Auto-confirm bKash &amp; Nagad payments without manual TrxID entry</p>
+            </div>
+          </div>
+          <div class="s-card-body">
+
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:12px;line-height:1.6">
+              <strong>Live server required for callbacks.</strong> On localhost, use ngrok so bKash/Nagad can send payment confirmations.
+              API credentials are obtained from your bKash merchant account or Nagad developer portal.
+            </div>
+
+            <!-- bKash -->
+            <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:36px;height:36px;border-radius:8px;background:#e91e63;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px">bK</div>
+                  <div>
+                    <div style="font-weight:700;font-size:13px">bKash Merchant API</div>
+                    <div style="font-size:11px;color:var(--text3)">Tokenized Checkout — customer pays, POS auto-confirms</div>
+                  </div>
+                </div>
+                <label class="toggle-wrap">
+                  <input type="checkbox" name="bkash_enabled" id="s_bkash_enabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div id="bkashApiFields">
+                <div class="toggle-row" style="margin-bottom:12px">
+                  <div class="toggle-info">
+                    <div class="toggle-title" style="font-size:12px">Sandbox Mode</div>
+                    <div class="toggle-desc">Use bKash sandbox for testing (disable on live server)</div>
+                  </div>
+                  <label class="toggle-wrap">
+                    <input type="checkbox" name="bkash_sandbox" id="s_bkash_sandbox">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="fg-row">
+                  <div class="fg">
+                    <label>App Key</label>
+                    <input type="text" class="fc" name="bkash_app_key" id="s_bkash_app_key" placeholder="Your bKash App Key">
+                  </div>
+                  <div class="fg">
+                    <label>App Secret</label>
+                    <input type="password" class="fc" name="bkash_app_secret" id="s_bkash_app_secret" placeholder="Your bKash App Secret">
+                  </div>
+                </div>
+                <div class="fg-row">
+                  <div class="fg">
+                    <label>Username</label>
+                    <input type="text" class="fc" name="bkash_username" id="s_bkash_username" placeholder="Merchant API Username">
+                  </div>
+                  <div class="fg">
+                    <label>Password</label>
+                    <input type="password" class="fc" name="bkash_password" id="s_bkash_password" placeholder="Merchant API Password">
+                  </div>
+                </div>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">
+                  Get credentials: <strong>merchant.bkash.com</strong> → Developer → API Credentials
+                </div>
+              </div>
+            </div>
+
+            <!-- Nagad -->
+            <div style="border:1px solid var(--border);border-radius:10px;padding:16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:36px;height:36px;border-radius:8px;background:#f97316;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px">NG</div>
+                  <div>
+                    <div style="font-weight:700;font-size:13px">Nagad Merchant API</div>
+                    <div style="font-size:11px;color:var(--text3)">DFS Checkout API — RSA-based merchant payment</div>
+                  </div>
+                </div>
+                <label class="toggle-wrap">
+                  <input type="checkbox" name="nagad_enabled" id="s_nagad_enabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div id="nagadApiFields">
+                <div class="toggle-row" style="margin-bottom:12px">
+                  <div class="toggle-info">
+                    <div class="toggle-title" style="font-size:12px">Sandbox Mode</div>
+                    <div class="toggle-desc">Use Nagad sandbox for testing</div>
+                  </div>
+                  <label class="toggle-wrap">
+                    <input type="checkbox" name="nagad_sandbox" id="s_nagad_sandbox">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="fg-row">
+                  <div class="fg">
+                    <label>Merchant ID</label>
+                    <input type="text" class="fc" name="nagad_merchant_id" id="s_nagad_merchant_id" placeholder="e.g. 683002007104225">
+                  </div>
+                </div>
+                <div class="fg">
+                  <label>Merchant Private Key (RSA, base64)</label>
+                  <textarea class="fct" name="nagad_merchant_key" id="s_nagad_merchant_key" placeholder="Paste your RSA private key (without -----BEGIN/END----- headers)" style="height:80px;font-size:11px;font-family:monospace"></textarea>
+                </div>
+                <div class="fg">
+                  <label>Nagad Public Key (base64)</label>
+                  <textarea class="fct" name="nagad_public_key" id="s_nagad_public_key" placeholder="Paste Nagad's RSA public key (from developer portal)" style="height:80px;font-size:11px;font-family:monospace"></textarea>
+                </div>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">
+                  Get credentials: <strong>nagad.com.bd</strong> → Developer → Merchant Account
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
 
-      <!-- ══ TAX & CURRENCY ══ -->
+      <!-- ══ VAT & CURRENCY ══ -->
       <div class="s-panel" id="panel-tax">
         <div class="s-card">
           <div class="s-card-head">
             <div class="s-card-ico" style="background:#d97706"><svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg></div>
-            <div><h3>Tax & Currency</h3><p>VAT, tax rates and currency format</p></div>
+            <div><h3>VAT & Currency</h3><p>Value Added Tax rates and currency format</p></div>
           </div>
           <div class="s-card-body">
             <div class="toggle-row">
               <div class="toggle-info">
-                <div class="toggle-title">Enable Tax</div>
-                <div class="toggle-desc">Apply tax on all sales</div>
+                <div class="toggle-title">Enable VAT</div>
+                <div class="toggle-desc">Apply VAT on sales — per-product VAT rates override this default</div>
               </div>
               <label class="toggle-wrap">
                 <input type="checkbox" name="tax_enabled" id="s_tax_enabled">
@@ -489,19 +663,42 @@ input[type=file]{display:none}
             </div>
             <div class="fg-row" style="margin-top:14px">
               <div class="fg">
-                <label>Default Tax Rate (%)</label>
+                <label>Default VAT Rate (%)</label>
                 <input type="number" class="fc" name="tax_rate" id="s_tax_rate" min="0" max="100" step="0.01" placeholder="0">
+                <div class="hint">Used when a product has no specific VAT rate set (e.g. standard 15%)</div>
               </div>
+              <div class="fg">
+                <label>VAT Label</label>
+                <select class="fc" name="vat_label" id="s_vat_label">
+                  <option value="VAT">VAT (Value Added Tax)</option>
+                  <option value="Tax">Tax</option>
+                  <option value="GST">GST</option>
+                </select>
+              </div>
+            </div>
+            <div class="toggle-row" style="margin-top:4px">
+              <div class="toggle-info">
+                <div class="toggle-title">VAT Inclusive by Default</div>
+                <div class="toggle-desc">Prices already include VAT — it is shown separately but not added on top</div>
+              </div>
+              <label class="toggle-wrap">
+                <input type="checkbox" name="tax_inclusive_default" id="s_tax_inclusive_default">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="fg-row" style="margin-top:14px">
               <div class="fg">
                 <label>Currency Code</label>
                 <input type="text" class="fc" name="currency" id="s_currency" placeholder="BDT" maxlength="5">
               </div>
+              <div class="fg">
+                <label>Currency Symbol</label>
+                <input type="text" class="fc" name="currency_symbol" id="s_currency_symbol" placeholder="৳" maxlength="5">
+              </div>
             </div>
-            <div class="fg">
-              <label>Currency Symbol</label>
-              <input type="text" class="fc" name="currency_symbol" id="s_currency_symbol" placeholder="৳" maxlength="5">
-              <div class="hint">This symbol appears before all prices (e.g. ৳, $, €)</div>
-            </div>
+            <p style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">
+              Bangladesh standard VAT: <strong>15%</strong> (exclusive, added on top). Reduced rates: 5%, 7.5%. Zero-rated / exempt items set per product.
+            </p>
           </div>
         </div>
       </div>
@@ -649,25 +846,53 @@ input[type=file]{display:none}
           </div>
         </div>
 
-        <!-- Admin: reset other user's password -->
+        <!-- Admin: reset other user's password + set PIN -->
         <?php if (Auth::can('all') || Auth::can('employees')): ?>
         <div class="s-card">
           <div class="s-card-head">
             <div class="s-card-ico" style="background:#dc2626"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></div>
-            <div><h3>Reset User Password</h3><p>Admin only — reset any user's password without knowing their current one</p></div>
+            <div><h3>Reset User Password / PIN</h3><p>Admin only — reset password or set PIN for any user</p></div>
           </div>
-          <div class="s-card-body" style="max-width:420px">
+          <div class="s-card-body" style="max-width:480px">
             <div class="form-group" style="margin-bottom:14px">
               <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Select User</label>
-              <select class="form-control" id="rpUser"></select>
+              <select class="form-control" id="rpUser" onchange="loadUserPin()"></select>
             </div>
-            <div class="form-group" style="margin-bottom:20px">
-              <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">New Password</label>
-              <input type="password" id="rpPass" class="form-control" placeholder="Min 6 characters" autocomplete="new-password">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+              <div class="form-group">
+                <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">New Password</label>
+                <input type="password" id="rpPass" class="form-control" placeholder="Min 6 characters" autocomplete="new-password">
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">
+                  PIN <span style="font-weight:400;color:var(--text3)">(4–6 digits)</span>
+                </label>
+                <input type="text" id="rpPin" class="form-control" placeholder="e.g. 1234"
+                       maxlength="6" pattern="[0-9]*" inputmode="numeric" autocomplete="off">
+              </div>
             </div>
-            <button class="btn" style="background:#dc2626;color:#fff" id="rpBtn" onclick="resetUserPassword()">
-              Reset Password
-            </button>
+            <div style="display:flex;gap:10px">
+              <button class="btn" style="background:#dc2626;color:#fff" id="rpBtn" onclick="resetUserPassword()">
+                Reset Password
+              </button>
+              <button class="btn" style="background:var(--accent);color:#fff" id="pinBtn" onclick="setUserPin()">
+                Set PIN
+              </button>
+            </div>
+            <div id="pinCurrentInfo" style="margin-top:10px;font-size:12px;color:var(--text2)"></div>
+          </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Roles & Permissions Matrix -->
+        <?php if (Auth::can('all') || Auth::can('employees')): ?>
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-ico" style="background:#0891b2"><svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4l5 2.18V11c0 3.5-2.33 6.79-5 7.93-2.67-1.14-5-4.43-5-7.93V7.18L12 5zm-2 7v4h4v-4h-4zm0-4v3h4V8h-4z"/></svg></div>
+            <div><h3>Roles & Permissions</h3><p>Control what each role can access</p></div>
+          </div>
+          <div class="s-card-body">
+            <div id="rolesPermMatrix"><div style="display:flex;align-items:center;gap:8px;padding:8px 0;color:var(--text3);font-size:13px"><div class="spin"></div> Loading roles…</div></div>
           </div>
         </div>
         <?php endif; ?>
@@ -689,6 +914,7 @@ function switchTab(tab) {
   document.querySelectorAll('.s-panel').forEach(p => p.classList.remove('active'));
   event.currentTarget.classList.add('active');
   document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'security') { loadSecurityUsers(); loadRolesPermissions(); }
 }
 
 // ── Drawer toggles ──
@@ -699,6 +925,126 @@ function toggleDrawerOpts() {
 function toggleDrawerManual() {
   const auto = document.getElementById('s_cash_drawer_auto').checked;
   document.getElementById('drawerManualNotice').classList.toggle('show', !auto);
+}
+
+// ── Hardware test ──────────────────────────────
+function showHwResult(msg, ok) {
+  const el = document.getElementById('hwTestResult');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.background = ok ? 'rgba(16,185,129,.12)' : 'rgba(239,68,68,.12)';
+  el.style.color      = ok ? '#10b981' : '#ef4444';
+  el.style.border     = '1px solid ' + (ok ? '#10b98133' : '#ef444433');
+}
+
+async function hwTestPrint() {
+  showHwResult('Sending test print…', true);
+  try {
+    // Try to use the POS printer object if we're on the POS page
+    if (typeof POSPrinter !== 'undefined') {
+      await POSPrinter.testPrint();
+      showHwResult('Test print sent! Check your printer.', true);
+      return;
+    }
+  } catch {}
+  // Settings page — open simple browser print
+  const html = `<!DOCTYPE html><html><head><title>Test</title>
+    <style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;width:76mm}</style></head>
+    <body>
+      <div style="text-align:center"><strong>*** NEXAPOS TEST PRINT ***</strong></div>
+      <hr><div>Printer is working correctly!</div>
+      <div>${new Date().toLocaleString()}</div>
+      <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),600)}<\/script>
+    </body></html>`;
+  const w = window.open('', '_blank', 'width=400,height=300');
+  if (w) { w.document.write(html); showHwResult('Test print dialog opened.', true); }
+  else    showHwResult('Popup blocked — allow popups and try again.', false);
+}
+
+async function hwTestDrawer() {
+  showHwResult('Sending drawer open command…', true);
+  if (typeof POSPayment !== 'undefined') {
+    POSPayment.triggerDrawer(true);
+    showHwResult('Drawer open command sent! (Animation shown)', true);
+    return;
+  }
+  // On settings page — use Web Serial directly
+  if (!navigator.serial) {
+    showHwResult('Web Serial not supported in this browser. Use Chrome or Edge.', false); return;
+  }
+  try {
+    const port   = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    const writer = port.writable.getWriter();
+    await writer.write(new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]));
+    writer.releaseLock();
+    await port.close();
+    showHwResult('Drawer open command sent! The drawer should have opened.', true);
+  } catch (e) {
+    if (e.name !== 'NotFoundError') showHwResult('Error: ' + (e.message || e), false);
+    else showHwResult('No port selected.', false);
+  }
+}
+
+// ── Scanner test ───────────────────────────────
+let _scanTestActive = false;
+let _scanTestBuffer = '';
+let _scanTestTimer  = null;
+let _scanTestKeyHandler = null;
+
+function toggleScanTest() {
+  const btn    = document.getElementById('scanTestBtn');
+  const output = document.getElementById('scanTestOutput');
+  const status = document.getElementById('scanTestStatus');
+  _scanTestActive = !_scanTestActive;
+
+  if (_scanTestActive) {
+    btn.textContent    = 'Stop Test';
+    btn.style.background = 'var(--red)';
+    btn.style.color      = '#fff';
+    output.style.display = 'block';
+    output.textContent   = 'Waiting for scan…';
+    if (status) status.textContent = '🟢 Listening — scan a barcode now';
+
+    _scanTestBuffer = '';
+    _scanTestKeyHandler = e => {
+      if (!_scanTestActive) return;
+      const now = Date.now();
+      clearTimeout(_scanTestTimer);
+
+      if (e.key === 'Enter') {
+        if (_scanTestBuffer.length >= 3) {
+          output.textContent = '✓ Scanned: ' + _scanTestBuffer;
+          output.style.color = 'var(--accent)';
+        }
+        _scanTestBuffer = '';
+        return;
+      }
+      if (e.key.length === 1) _scanTestBuffer += e.key;
+
+      // Show what's being typed
+      output.textContent = 'Reading: ' + _scanTestBuffer + '…';
+      output.style.color = 'var(--text2)';
+
+      _scanTestTimer = setTimeout(() => {
+        if (_scanTestBuffer.length >= 3) {
+          output.textContent = '✓ Scanned: ' + _scanTestBuffer;
+          output.style.color = 'var(--accent)';
+        }
+        _scanTestBuffer = '';
+      }, 150);
+    };
+    document.addEventListener('keydown', _scanTestKeyHandler);
+  } else {
+    btn.textContent      = 'Start Scanner Test';
+    btn.style.background = '';
+    btn.style.color      = '';
+    output.style.display = 'none';
+    if (status) status.textContent = '';
+    if (_scanTestKeyHandler) document.removeEventListener('keydown', _scanTestKeyHandler);
+    _scanTestKeyHandler = null;
+  }
 }
 
 // ── Load settings ──
@@ -713,7 +1059,11 @@ async function loadSettings() {
     'business_name','business_email','business_phone','business_address',
     'timezone','currency','currency_symbol','tax_rate','invoice_prefix',
     'invoice_start','receipt_footer','points_per_amount','points_value',
-    'cash_drawer_port',
+    'cash_drawer_port','vat_label',
+    // bKash
+    'bkash_app_key','bkash_app_secret','bkash_username','bkash_password',
+    // Nagad
+    'nagad_merchant_id','nagad_merchant_key','nagad_public_key',
   ];
   textFields.forEach(k => {
     const el = document.getElementById('s_' + k);
@@ -722,9 +1072,12 @@ async function loadSettings() {
 
   // Checkboxes
   const checkFields = [
-    'tax_enabled','loyalty_enabled','receipt_auto_print','thermal_printer',
+    'tax_enabled','tax_inclusive_default',
+    'loyalty_enabled','receipt_auto_print','thermal_printer',
     'cash_drawer_enabled','cash_drawer_auto','cash_drawer_manual_btn',
     'receipt_show_logo','low_stock_alert','qr_payment_enabled',
+    'barcode_auto_scan','barcode_manual_entry',
+    'bkash_enabled','bkash_sandbox','nagad_enabled','nagad_sandbox',
   ];
   checkFields.forEach(k => {
     const el = document.getElementById('s_' + k);
@@ -1011,12 +1364,94 @@ async function loadSecurityUsers() {
     users.map(u => `<option value="${u.id}">${u.name} (${u.role_name||u.role_slug||''})</option>`).join('');
 }
 
+// ── Roles & Permissions matrix ──
+const PERM_DEFS = [
+  { key:'all',       label:'All (Admin)' },
+  { key:'pos',       label:'POS' },
+  { key:'products',  label:'Products' },
+  { key:'inventory', label:'Inventory' },
+  { key:'orders',    label:'Orders' },
+  { key:'customers', label:'Customers' },
+  { key:'reports',   label:'Reports' },
+  { key:'expenses',  label:'Expenses' },
+  { key:'purchases', label:'Purchases' },
+  { key:'suppliers', label:'Suppliers' },
+  { key:'returns',   label:'Returns' },
+  { key:'employees', label:'Employees' },
+  { key:'settings',  label:'Settings' },
+];
+
+async function loadRolesPermissions() {
+  const el = document.getElementById('rolesPermMatrix');
+  if (!el) return;
+  const res = await fetch('../routes/api.php?module=employees&action=roles').then(r=>r.json());
+  const roles = res.data || [];
+  if (!roles.length) { el.innerHTML = '<p style="color:var(--text3);font-size:13px">No roles found.</p>'; return; }
+
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+      <table class="role-table" style="min-width:700px">
+        <thead>
+          <tr>
+            <th style="min-width:120px">Role</th>
+            ${PERM_DEFS.map(p=>`<th style="text-align:center;min-width:70px;font-size:10px">${p.label}</th>`).join('')}
+            <th style="text-align:center">Save</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${roles.map(role => {
+            const perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions || '{}') : (role.permissions || {});
+            return `<tr id="role-row-${role.id}">
+              <td><strong>${role.name}</strong><br><span style="font-size:11px;color:var(--text3)">${role.slug}</span></td>
+              ${PERM_DEFS.map(p => {
+                const checked = perms[p.key] ? 'checked' : '';
+                const isAll = p.key === 'all';
+                return `<td style="text-align:center">
+                  <input type="checkbox" class="perm-cb role-${role.id}-cb" data-role="${role.id}" data-perm="${p.key}" ${checked}
+                    style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"
+                    onchange="if(this.dataset.perm==='all')toggleAllPerms(${role.id},this.checked)">
+                </td>`;
+              }).join('')}
+              <td style="text-align:center">
+                <button onclick="saveRolePerms(${role.id})" style="padding:4px 12px;background:var(--accent);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='var(--accent)'">Save</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:10px">⚠ "All (Admin)" grants full access regardless of other permissions. Changes take effect on next login.</p>
+  `;
+}
+
+function toggleAllPerms(roleId, isAll) {
+  document.querySelectorAll(`.role-${roleId}-cb`).forEach(cb => {
+    if (cb.dataset.perm !== 'all') {
+      cb.disabled = isAll;
+      if (isAll) cb.checked = false;
+    }
+  });
+}
+
+async function saveRolePerms(roleId) {
+  const perms = {};
+  document.querySelectorAll(`.role-${roleId}-cb:checked`).forEach(cb => {
+    perms[cb.dataset.perm] = true;
+  });
+  const fd = new FormData();
+  fd.append('role_id', roleId);
+  fd.append('permissions', JSON.stringify(perms));
+  const res = await fetch('../routes/api.php?module=employees&action=save_role_perms', { method:'POST', body:fd }).then(r=>r.json());
+  if (res.success) toast('Permissions saved — users must re-login to see changes', 'success');
+  else toast(res.message || 'Failed to save', 'error');
+}
+
 async function resetUserPassword() {
   const uid  = document.getElementById('rpUser').value;
   const pass = document.getElementById('rpPass').value.trim();
   if (!uid)          { toast('Select a user', 'error'); return; }
   if (pass.length<6) { toast('Password min 6 characters', 'error'); return; }
-  if (!confirm(`Reset password for this user?`)) return;
+  if (!confirm('Reset password for this user?')) return;
   const btn = document.getElementById('rpBtn');
   btn.disabled = true; btn.textContent = 'Resetting…';
   const fd = new FormData();
@@ -1025,6 +1460,35 @@ async function resetUserPassword() {
   btn.disabled = false; btn.textContent = 'Reset Password';
   if (res.success) { toast('Password reset successfully', 'success'); document.getElementById('rpPass').value=''; }
   else toast(res.message || 'Failed', 'error');
+}
+
+async function setUserPin() {
+  const uid = document.getElementById('rpUser').value;
+  const pin = document.getElementById('rpPin').value.trim();
+  if (!uid) { toast('Select a user', 'error'); return; }
+  if (!/^\d{4,6}$/.test(pin)) { toast('PIN must be 4–6 digits', 'error'); return; }
+  if (!confirm('Set PIN for this user?')) return;
+  const btn = document.getElementById('pinBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const fd = new FormData();
+  fd.append('id', uid); fd.append('pin', pin);
+  const res = await fetch('../routes/api.php?module=employees&action=set_pin', { method:'POST', body:fd }).then(r=>r.json());
+  btn.disabled = false; btn.textContent = 'Set PIN';
+  if (res.success) {
+    toast('PIN set successfully', 'success');
+    document.getElementById('rpPin').value = '';
+    document.getElementById('pinCurrentInfo').textContent = 'PIN is set for this user.';
+  } else toast(res.message || 'Failed', 'error');
+}
+
+async function loadUserPin() {
+  const uid = document.getElementById('rpUser').value;
+  const info = document.getElementById('pinCurrentInfo');
+  if (!uid || !info) return;
+  const res = await fetch(`../routes/api.php?module=employees&action=get&id=${uid}`).then(r=>r.json());
+  if (res.success) {
+    info.textContent = res.data?.pin ? '● PIN is already set for this user' : '○ No PIN set for this user';
+  }
 }
 
 // Init

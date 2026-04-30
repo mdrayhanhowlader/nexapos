@@ -118,6 +118,7 @@ switch ($action) {
             'selling_price'   => (float)($_POST['selling_price'] ?? 0),
             'wholesale_price' => (float)($_POST['wholesale_price'] ?? 0),
             'tax_rate'        => (float)($_POST['tax_rate'] ?? 0),
+            'tax_inclusive'   => (int)($_POST['tax_inclusive'] ?? 0),
             'stock_alert_qty' => (int)($_POST['stock_alert_qty'] ?? 5),
             'track_stock'     => (int)($_POST['track_stock'] ?? 1),
             'status'          => $_POST['status'] ?? 'active',
@@ -275,6 +276,63 @@ switch ($action) {
         do { $bc = generate_ean13(); }
         while (DB::exists('products','barcode=?',[$bc]));
         Response::success(['barcode' => $bc]);
+        break;
+
+    case 'get_tax_presets':
+        Response::success(DB::fetchAll(
+            "SELECT id, name, rate, type FROM taxes WHERE status='active' ORDER BY rate ASC"
+        ));
+        break;
+
+    // ── Add-ons: get list for a product ───────────────────────────────────────
+    case 'get_addons':
+        $pid  = (int)($_GET['product_id'] ?? 0);
+        if (!$pid) Response::error('product_id required');
+        $rows = DB::fetchAll(
+            "SELECT pa.id, pa.addon_id, pa.is_required, pa.sort_order,
+                    p.name, p.sku, p.selling_price AS price, p.image, p.type, p.unit
+             FROM product_addons pa
+             JOIN products p ON p.id=pa.addon_id
+             WHERE pa.product_id=? AND p.status='active'
+             ORDER BY pa.sort_order, p.name",
+            [$pid]
+        );
+        Response::success($rows);
+        break;
+
+    // ── Add-ons: save (add or update) ─────────────────────────────────────────
+    case 'save_addon':
+        Auth::requirePermission('products');
+        $pid     = (int)($_POST['product_id'] ?? 0);
+        $addonId = (int)($_POST['addon_id']   ?? 0);
+        $req     = (int)($_POST['is_required'] ?? 0);
+        $sort    = (int)($_POST['sort_order']  ?? 0);
+        if (!$pid || !$addonId) Response::error('product_id and addon_id required');
+        if ($pid === $addonId)  Response::error('A product cannot be its own add-on');
+        DB::query(
+            "INSERT INTO product_addons (product_id, addon_id, is_required, sort_order)
+             VALUES (?,?,?,?)
+             ON DUPLICATE KEY UPDATE is_required=VALUES(is_required), sort_order=VALUES(sort_order)",
+            [$pid, $addonId, $req, $sort]
+        );
+        log_activity('save_addon','products',"Addon #{$addonId} linked to product #{$pid}",$pid);
+        Response::success(null,'Add-on saved');
+        break;
+
+    // ── Add-ons: remove ───────────────────────────────────────────────────────
+    case 'delete_addon':
+        Auth::requirePermission('products');
+        $id = (int)($_POST['id'] ?? 0);
+        if (!$id) Response::error('id required');
+        DB::delete('product_addons','id=?',[$id]);
+        Response::success(null,'Add-on removed');
+        break;
+
+    // ── Add-ons: check if any product has addons (POS use) ───────────────────
+    case 'has_addons':
+        $pid  = (int)($_GET['product_id'] ?? 0);
+        $cnt  = (int)(DB::fetch("SELECT COUNT(*) as n FROM product_addons pa JOIN products p ON p.id=pa.addon_id WHERE pa.product_id=? AND p.status='active'", [$pid])['n'] ?? 0);
+        Response::success(['has_addons' => $cnt > 0, 'count' => $cnt]);
         break;
 
     default:

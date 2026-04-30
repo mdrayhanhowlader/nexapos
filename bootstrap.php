@@ -99,3 +99,23 @@ if (!headers_sent()) {
 
 // ── Start session ─────────────────────────────────────────────────────────────
 Auth::init();
+
+// ── Auto-migrations (create new tables / add columns if not exist) ───────────
+try {
+    DB::query("CREATE TABLE IF NOT EXISTS product_addons (
+        id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        product_id     INT UNSIGNED NOT NULL,
+        addon_id       INT UNSIGNED NOT NULL,
+        is_required    TINYINT(1)   NOT NULL DEFAULT 0,
+        sort_order     INT          NOT NULL DEFAULT 0,
+        created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_product_addon (product_id, addon_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (Throwable $e) {}
+
+// Add PIN column to users if missing
+try {
+    DB::query("ALTER TABLE users ADD COLUMN pin VARCHAR(6) NULL DEFAULT NULL UNIQUE AFTER password");
+} catch (Throwable $e) {
+    // Column already exists — ignore
+}

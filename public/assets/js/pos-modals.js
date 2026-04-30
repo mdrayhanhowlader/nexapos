@@ -13,6 +13,8 @@ const POSModals = {
     setTimeout(() => document.getElementById('custSearch')?.focus(), 100);
   },
 
+  _custCache: [],
+
   async searchCustomer(q) {
     const el = document.getElementById('custResults');
     if (!el) return;
@@ -20,15 +22,16 @@ const POSModals = {
 
     const res  = await POS.get(`${POS.API}?module=customers&action=search&q=${encodeURIComponent(q)}`);
     const list = res.data || [];
+    this._custCache = list;
 
     if (!list.length) {
       el.innerHTML = `<div style="padding:12px;color:var(--text3);font-size:13px">No customers found</div>`;
       return;
     }
 
-    el.innerHTML = list.map(c => `
+    el.innerHTML = list.map((c, i) => `
       <div
-        onclick="POSModals.selectCustomer(${JSON.stringify(JSON.stringify(c))})"
+        onclick="POSModals.selectFromCache(${i})"
         style="padding:10px;border:1px solid var(--border);border-radius:var(--r);
                cursor:pointer;margin-bottom:6px;transition:border-color .15s"
         onmouseenter="this.style.borderColor='var(--accent)'"
@@ -44,8 +47,13 @@ const POSModals = {
       </div>`).join('');
   },
 
+  selectFromCache(idx) {
+    const c = this._custCache?.[idx];
+    if (c) this.selectCustomer(JSON.stringify(c));
+  },
+
   selectCustomer(jsonStr) {
-    const c = JSON.parse(jsonStr);
+    const c = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
     POS.customer = c;
 
     const btn  = document.getElementById('custBtn');
@@ -70,13 +78,52 @@ const POSModals = {
   },
 
   clearCustomer() {
-    POS.customer = null;
-    POS.discount = { type: 'fixed', value: 0, amount: 0 };
+    POS.customer     = null;
+    POS.discount     = { type: 'fixed', value: 0, amount: 0 };
+    POS.redeemPoints = 0;
     const btn  = document.getElementById('custBtn');
     const name = document.getElementById('custName');
     if (btn)  btn.classList.remove('has');
     if (name) name.textContent = 'Walk-in Customer';
     POSCart.updateTotals();
+  },
+
+  // ── Loyalty points redemption ──────────────
+  openPointsRedemption() {
+    if (!POS.customer) {
+      POS.toast('Select a customer first', 'warning');
+      return;
+    }
+    if (!window.NEXAPOS?.loyaltyEnabled) {
+      POS.toast('Loyalty program is not enabled', 'warning');
+      return;
+    }
+    const pts = parseInt(POS.customer.loyalty_points) || 0;
+    const val = window.NEXAPOS.pointsValue || 0;
+    const balEl = document.getElementById('ptsBalance');
+    if (balEl) balEl.textContent = `${pts} pts available = ${POS.fmt(pts * val)}`;
+    const inp = document.getElementById('ptsRedeemInp');
+    if (inp) { inp.max = pts; inp.value = POS.redeemPoints || 0; }
+    POS.openModal('pointsModal');
+    setTimeout(() => inp?.focus(), 100);
+  },
+
+  applyPointsRedemption() {
+    const pts   = parseInt(document.getElementById('ptsRedeemInp')?.value) || 0;
+    const avail = parseInt(POS.customer?.loyalty_points) || 0;
+    if (pts < 0 || pts > avail) {
+      POS.toast('Invalid points — max available: ' + avail, 'warning');
+      return;
+    }
+    POS.redeemPoints = pts;
+    POS.closeModal('pointsModal');
+    POSCart.updateTotals();
+    if (pts > 0) {
+      const disc = pts * (window.NEXAPOS?.pointsValue || 0);
+      POS.toast(`${pts} pts = ${POS.fmt(disc)} discount applied`, 'success');
+    } else {
+      POS.toast('Points redemption cleared', 'info');
+    }
   },
 
   async quickAddCustomer() {
@@ -342,45 +389,67 @@ const POSModals = {
     if (!el) return;
 
     if (res.success) {
-      const s = res.data;
+      const s   = res.data;
+      const dur = this._shiftDuration(s.opened_at);
+      const payRows = (s.payments || []).map(p => `
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;color:var(--text2)">
+          <span>${p.name}</span><strong>৳${parseFloat(p.total).toFixed(2)}</strong>
+        </div>`).join('') || `<div style="font-size:12px;color:var(--text3);padding:4px 0">No sales yet</div>`;
+
       el.innerHTML = `
-        <div style="background:var(--bg);border-radius:var(--r);padding:14px;margin-bottom:14px;font-size:13px">
-          <div style="display:flex;justify-content:space-between;padding:4px 0;color:var(--text2)">
-            <span>Opening Balance</span><strong>${POS.fmt(s.opening_balance)}</strong>
+        <div style="background:var(--bg);border-radius:var(--r);padding:14px;margin-bottom:12px;font-size:13px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-weight:600;color:var(--text1)">${s.cashier_name || 'Cashier'}</span>
+            <span style="font-size:11px;color:var(--text3);background:#e5e7eb;padding:2px 8px;border-radius:10px">${dur}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:4px 0;color:var(--text2)">
-            <span>Total Sales</span><strong style="color:var(--green)">${POS.fmt(s.total_sales)}</strong>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+            <span style="color:var(--text2)">Opening Cash</span><strong>${POS.fmt(s.opening_balance)}</strong>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:4px 0;color:var(--text2)">
-            <span>Orders</span><strong>${s.orders_count}</strong>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+            <span style="color:var(--text2)">Orders</span><strong>${s.orders_count}</strong>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:4px 0;color:var(--text2)">
-            <span>Opened At</span><strong>${new Date(s.opened_at).toLocaleTimeString()}</strong>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+            <span style="color:var(--text2)">Total Sales</span><strong style="color:var(--green)">${POS.fmt(s.sales_total)}</strong>
           </div>
         </div>
-        <div class="fg"><label>Closing Balance (৳)</label>
-          <input type="number" class="fc" id="closeBalInp" value="0" min="0">
+        <div style="background:var(--bg);border-radius:var(--r);padding:12px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px">Payment Breakdown</div>
+          ${payRows}
+        </div>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--r);padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;font-weight:600;color:#16a34a">Expected Cash in Drawer</span>
+          <strong style="font-size:16px;color:#16a34a">${POS.fmt(s.expected_cash)}</strong>
+        </div>
+        <div class="fg"><label>Actual Closing Cash (৳)</label>
+          <input type="number" class="fc" id="closeBalInp" value="${parseFloat(s.expected_cash).toFixed(2)}" min="0">
         </div>
         <div class="fg"><label>Note (optional)</label>
-          <input type="text" class="fc" id="closeNoteInp" placeholder="Any note...">
+          <input type="text" class="fc" id="closeNoteInp" placeholder="Any handover note...">
         </div>
-        <button
-          onclick="POSModals.closeShift()"
-          style="width:100%;height:42px;background:var(--red-bg);border:1.5px solid #fecaca;color:var(--red);border-radius:var(--r);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer"
-        >Close Shift</button>`;
+        <button onclick="POSModals.closeShift()"
+          style="width:100%;height:42px;background:var(--red-bg);border:1.5px solid #fecaca;color:var(--red);border-radius:var(--r);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;margin-top:4px">
+          Close Shift & Handover
+        </button>`;
     } else {
       el.innerHTML = `
-        <p style="color:var(--text2);font-size:13px;margin-bottom:14px">
-          No active shift. Open one to start recording sales.
-        </p>
-        <div class="fg"><label>Opening Cash Balance (৳)</label>
-          <input type="number" class="fc" id="openBalInp" value="0" min="0">
+        <div style="text-align:center;padding:12px 0 18px">
+          <svg viewBox="0 0 24 24" fill="var(--text3)" style="width:36px;height:36px;margin-bottom:8px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          <p style="color:var(--text2);font-size:13px;margin-bottom:0">No active shift. Enter opening cash to start.</p>
         </div>
-        <button class="btn-chk" style="font-size:13px;padding:10px" onclick="POSModals.openNewShift()">
+        <div class="fg"><label>Opening Cash Balance (৳)</label>
+          <input type="number" class="fc" id="openBalInp" value="0" min="0" placeholder="Cash in hand at shift start">
+        </div>
+        <button class="btn-chk" style="font-size:13px;padding:10px;margin-top:4px" onclick="POSModals.openNewShift()">
           Open Shift
         </button>`;
     }
     POS.openModal('shiftModal');
+  },
+
+  _shiftDuration(openedAt) {
+    const diff = Math.floor((Date.now() - new Date(openedAt).getTime()) / 60000);
+    if (diff < 60) return diff + ' min';
+    return Math.floor(diff / 60) + 'h ' + (diff % 60) + 'm';
   },
 
   async openNewShift() {

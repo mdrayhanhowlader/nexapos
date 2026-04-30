@@ -6,16 +6,40 @@ const POS = {
   API: '../routes/api.php',
 
   // ── State ──────────────────────────────────
-  cart:        [],
-  customer:    null,
-  discount:    { type: 'fixed', value: 0, amount: 0 },
-  payMethods:  [],
-  selPayments: [],
-  allProducts: [],
-  lastOrderId: null,
+  cart:         [],
+  customer:     null,
+  discount:     { type: 'fixed', value: 0, amount: 0 },
+  redeemPoints: 0,
+  payMethods:   [],
+  selPayments:  [],
+  allProducts:  [],
+  lastOrderId:  null,
 
   // Scanner mode: 'scanner' | 'manual' | 'both'
+  // Loaded from settings on init — localStorage is the runtime override
   inputMode: localStorage.getItem('pos_input_mode') || 'both',
+
+  // Load scanner mode from server settings (called on init)
+  async loadScannerMode() {
+    try {
+      const r = await fetch(this.API + '?module=settings&action=get_all');
+      const d = await r.json();
+      if (!d.success) return;
+      const autoScan    = d.data['barcode_auto_scan']    !== '0';
+      const manualEntry = d.data['barcode_manual_entry'] !== '0';
+      // Only override if settings have been explicitly saved (not just defaults)
+      if ('barcode_auto_scan' in d.data || 'barcode_manual_entry' in d.data) {
+        const derived = autoScan && manualEntry ? 'both'
+                      : autoScan               ? 'scanner'
+                      : manualEntry            ? 'manual'
+                      : 'both'; // fallback
+        // localStorage runtime override takes precedence
+        if (!localStorage.getItem('pos_input_mode')) {
+          this.inputMode = derived;
+        }
+      }
+    } catch {}
+  },
 
   // ── API Helpers ────────────────────────────
   async get(url) {
@@ -96,11 +120,29 @@ const POS = {
   },
 
   getTax() {
-    return this.cart.reduce((s, i) => s + (i.subtotal * (i.tax_rate / 100)), 0);
+    // Returns total tax amount for DISPLAY (receipt line item).
+    // Inclusive items: extract embedded tax = sub * rate / (100 + rate)
+    // Exclusive items: add-on tax = sub * rate / 100
+    return this.cart.reduce((s, i) => {
+      const rate = i.tax_rate || 0;
+      if (!rate) return s;
+      return (i.tax_inclusive ?? 1)
+        ? s + i.subtotal * rate / (100 + rate)   // extract from inclusive price
+        : s + i.subtotal * rate / 100;            // add-on tax
+    }, 0);
   },
 
   getTotal() {
-    return Math.max(0, this.getSubtotal() + this.getTax() - this.discount.amount);
+    const sub = this.getSubtotal();
+    // Only EXCLUSIVE-tax items add extra to the total.
+    // Inclusive items already have tax baked into their selling price.
+    const extraTax = this.cart.reduce((s, i) => {
+      const rate = i.tax_rate || 0;
+      if (!rate || (i.tax_inclusive ?? 1)) return s;
+      return s + i.subtotal * rate / 100;
+    }, 0);
+    const ptsDisc = (this.redeemPoints || 0) * (window.NEXAPOS?.pointsValue || 0);
+    return Math.max(0, sub + extraTax - this.discount.amount - ptsDisc);
   },
 
   getCartQty() {

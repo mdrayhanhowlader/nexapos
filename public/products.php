@@ -158,6 +158,13 @@ tr:hover td{background:#fafafa}
 
 @media(max-width:1100px){.stats{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.stats{grid-template-columns:1fr 1fr}}
+/* Label sticker preview */
+.lbl-sticker{display:inline-flex;flex-direction:column;align-items:center;justify-content:space-between;
+  border:.3mm solid #ccc;border-radius:1mm;padding:1.5mm;box-sizing:border-box;overflow:hidden;background:#fff}
+.lbl-name{font-weight:700;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
+.lbl-svg{max-width:100%}
+.lbl-bc-num{font-size:6pt;color:#555;letter-spacing:.5px}
+.lbl-price{font-weight:800;margin-top:.5mm}
 </style>
 </head>
 <body>
@@ -249,7 +256,20 @@ tr:hover td{background:#fafafa}
         <div class="fg"><label>Stock Alert Qty</label><input class="fc" id="falert" type="number" min="0" placeholder="5"></div>
       </div>
       <div class="r2">
-        <div class="fg"><label>Tax Rate (%)</label><input class="fc" id="ftax" type="number" min="0" step="0.01" placeholder="0"></div>
+        <div class="fg">
+          <label>VAT Rate</label>
+          <select class="fc" id="ftaxPreset" onchange="applyVatPreset(this.value)">
+            <option value="">— Select preset —</option>
+          </select>
+          <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+            <input class="fc" id="ftax" type="number" min="0" step="0.01" placeholder="0" style="flex:1" oninput="document.getElementById('ftaxPreset').value=''">
+            <span style="font-size:12px;color:var(--t2);white-space:nowrap">%</span>
+            <select class="fc" id="ftax_inclusive" style="flex:1;min-width:0">
+              <option value="0">Excl. (add on top)</option>
+              <option value="1">Incl. (price includes VAT)</option>
+            </select>
+          </div>
+        </div>
         <div class="fg"><label>Status</label><select class="fc" id="fstat"><option value="active">Active</option><option value="inactive">Inactive</option><option value="out_of_stock">Out of Stock</option></select></div>
       </div>
       <div class="fg"><label>Description</label><textarea class="fct" id="fdesc" placeholder="Optional…"></textarea></div>
@@ -257,7 +277,43 @@ tr:hover td{background:#fafafa}
     </div>
     <div class="mf">
       <button class="btn" onclick="closeM('prodModal')">Cancel</button>
+      <button class="btn btn-secondary" id="addonsBtn" style="display:none" onclick="openAddonsManager()">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        Add-ons
+      </button>
       <button class="btn btn-primary" id="saveBtn" onclick="doSave()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add-ons Manager Modal -->
+<div class="modal" id="addonsManagerModal">
+  <div class="mc" style="max-width:520px">
+    <div class="mh"><h3>Manage Add-ons — <span id="addonsProdName" style="font-weight:400"></span></h3><button class="mx" onclick="closeM('addonsManagerModal')">×</button></div>
+    <div class="mb" style="padding:0">
+      <!-- Link existing product as addon -->
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Link a product as add-on</div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;position:relative">
+            <input class="fc" id="addonSearch" placeholder="Search product by name or SKU…"
+                   oninput="searchAddonProduct(this.value)" autocomplete="off" style="padding-right:30px">
+            <div id="addonSearchDrop" style="display:none;position:absolute;top:100%;left:0;right:0;
+                 background:var(--card);border:1px solid var(--border);border-radius:8px;
+                 z-index:200;max-height:180px;overflow-y:auto;box-shadow:var(--shadow)"></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap">
+            <input type="checkbox" id="addonRequired"> Required
+          </label>
+        </div>
+      </div>
+      <!-- Current addons list -->
+      <div id="addonsMgrList" style="max-height:300px;overflow-y:auto">
+        <div style="text-align:center;padding:30px;color:var(--t3);font-size:13px">No add-ons linked yet</div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn" onclick="closeM('addonsManagerModal')">Close</button>
     </div>
   </div>
 </div>
@@ -397,6 +453,7 @@ function render() {
         <td><span class="badge ${bc}">${p.status}</span></td>
         <td><div class="act">
           <button onclick="editProd(${p.id})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+          <button onclick="openLabelModal([${p.id}])" title="Print Label" style="color:var(--accent)"><svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg></button>
           <button class="del" onclick="delProd(${p.id})" title="Delete"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
         </div></td></tr>`;
     }).join('')}</tbody></table>`;
@@ -422,6 +479,8 @@ function openAdd(){
   eid=null;
   document.getElementById('mtitle').textContent='Add Product';
   ['fn','fsku','fbc','fcost','fprice','fwhole','fstock','falert','ftax','fdesc'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  const _ti=document.getElementById('ftax_inclusive');if(_ti)_ti.value='0';
+  const _tp=document.getElementById('ftaxPreset');if(_tp)_tp.value='';
   document.getElementById('funit').value='pcs';
   document.getElementById('fstat').value='active';
   document.getElementById('fcat2').value='';
@@ -430,6 +489,10 @@ function openAdd(){
   document.getElementById('fstockLbl').textContent='Opening Stock';
   document.getElementById('fstockHint').textContent='Initial quantity (new products only)';
   resetImg();
+  // Hide add-ons button — only available when editing an existing product
+  const ab = document.getElementById('addonsBtn');
+  if (ab) ab.style.display = 'none';
+  loadVatPresets();
   document.getElementById('prodModal').classList.add('open');
   setTimeout(()=>document.getElementById('fn').focus(),120);
 }
@@ -462,13 +525,19 @@ async function editProd(id){
   document.getElementById('fwhole').value =p.wholesale_price||'';
   document.getElementById('fstock').value =''; // blank = keep existing
   document.getElementById('falert').value =p.stock_alert_qty||5;
-  document.getElementById('ftax').value   =p.tax_rate||0;
-  document.getElementById('fdesc').value  =p.description||'';
+  document.getElementById('ftax').value           = p.tax_rate || 0;
+  document.getElementById('ftax_inclusive').value = p.tax_inclusive ?? 0;
+  document.getElementById('ftaxPreset').value     = '';
+  document.getElementById('fdesc').value          = p.description || '';
   document.getElementById('funit').value  =p.unit||'pcs';
   document.getElementById('fstat').value  =p.status||'active';
   document.getElementById('fcat2').value  =p.category_id||'';
   document.getElementById('ftrack').checked=!!parseInt(p.track_stock??1);
   if(p.image)setPreview(IMGBASE+p.image);
+  loadVatPresets();
+  // Show Add-ons button when editing existing product
+  const ab = document.getElementById('addonsBtn');
+  if (ab) ab.style.display = '';
 }
 
 // Save
@@ -503,7 +572,8 @@ async function doSave(){
     fd.append('opening_stock',stockVal||0);
   }
   fd.append('stock_alert_qty',document.getElementById('falert').value||5);
-  fd.append('tax_rate',       document.getElementById('ftax').value||0);
+  fd.append('tax_rate',       document.getElementById('ftax').value || 0);
+  fd.append('tax_inclusive',  document.getElementById('ftax_inclusive').value || 0);
   fd.append('description',    document.getElementById('fdesc').value);
   fd.append('status',         document.getElementById('fstat').value);
   fd.append('track_stock',    document.getElementById('ftrack').checked?1:0);
@@ -606,6 +676,243 @@ function toast(msg,type='',dur=3200){
 
 loadCats();
 loadProds();
+
+// ── Add-ons Manager ────────────────────────────
+let _addonsProdId = null;
+let _addonSearchTimer = null;
+
+function openAddonsManager() {
+  const pid = document.getElementById('prodId').value;
+  if (!pid) { toast('Save the product first', 'warning'); return; }
+  _addonsProdId = parseInt(pid);
+  document.getElementById('addonsProdName').textContent = document.getElementById('fn').value;
+  document.getElementById('addonSearch').value = '';
+  document.getElementById('addonSearchDrop').style.display = 'none';
+  document.getElementById('addonRequired').checked = false;
+  loadAddons();
+  document.getElementById('addonsManagerModal').classList.add('open');
+}
+
+async function loadAddons() {
+  const res  = await fetch(`${API}?module=products&action=get_addons&product_id=${_addonsProdId}`);
+  const data = await res.json();
+  const list = document.getElementById('addonsMgrList');
+  const rows = data.data || [];
+  if (!rows.length) {
+    list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3);font-size:13px">No add-ons linked yet — search above to add one</div>';
+    return;
+  }
+  list.innerHTML = rows.map(a => {
+    const img = a.image
+      ? `<img src="/nexapos/public/uploads/products/${a.image}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0">`
+      : `<div style="width:32px;height:32px;border-radius:6px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">➕</div>`;
+    const reqBadge = a.is_required
+      ? `<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px">Required</span>`
+      : `<span style="font-size:10px;background:var(--bg2);color:var(--t2);border-radius:4px;padding:1px 5px;margin-left:6px">Optional</span>`;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)">
+        ${img}
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${a.name}${reqBadge}</div>
+          <div style="font-size:11px;color:var(--t3)">৳${parseFloat(a.price).toFixed(2)} · ${a.unit||'pcs'}</div>
+        </div>
+        <button class="btn" style="padding:4px 10px;font-size:12px;background:transparent;color:var(--red);border:1px solid var(--red)"
+                onclick="removeAddon(${a.id})">Remove</button>
+      </div>`;
+  }).join('');
+}
+
+async function removeAddon(id) {
+  const fd = new FormData();
+  fd.append('id', id);
+  const res  = await fetch(`${API}?module=products&action=delete_addon`, { method:'POST', body:fd });
+  const data = await res.json();
+  if (data.success) { toast('Add-on removed', 'ok'); loadAddons(); }
+  else toast(data.message || 'Error', 'error');
+}
+
+async function linkAddon(addonId) {
+  const fd = new FormData();
+  fd.append('product_id',  _addonsProdId);
+  fd.append('addon_id',    addonId);
+  fd.append('is_required', document.getElementById('addonRequired').checked ? 1 : 0);
+  const res  = await fetch(`${API}?module=products&action=save_addon`, { method:'POST', body:fd });
+  const data = await res.json();
+  if (data.success) {
+    toast('Add-on linked', 'ok');
+    document.getElementById('addonSearch').value = '';
+    document.getElementById('addonSearchDrop').style.display = 'none';
+    loadAddons();
+  } else toast(data.message || 'Error', 'error');
+}
+
+function searchAddonProduct(q) {
+  clearTimeout(_addonSearchTimer);
+  const drop = document.getElementById('addonSearchDrop');
+  if (!q.trim()) { drop.style.display = 'none'; return; }
+  _addonSearchTimer = setTimeout(async () => {
+    const res  = await fetch(`${API}?module=products&action=list&search=${encodeURIComponent(q)}&per_page=10`);
+    const data = await res.json();
+    const rows = (data.data?.products || []).filter(p => p.id != _addonsProdId);
+    if (!rows.length) { drop.style.display = 'none'; return; }
+    drop.innerHTML = rows.map(p => `
+      <div onmousedown="linkAddon(${p.id})" style="padding:8px 12px;cursor:pointer;font-size:13px;
+           display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)"
+           onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        <div style="flex:1"><strong>${p.name}</strong>
+          <span style="color:var(--t3);font-size:11px;margin-left:6px">${p.sku||''}</span>
+        </div>
+        <span style="color:var(--accent);font-weight:600;font-size:12px">৳${parseFloat(p.selling_price).toFixed(2)}</span>
+      </div>`).join('');
+    drop.style.display = 'block';
+  }, 300);
+}
+
+
+// ── Label / Barcode Print ─────────────────────────────────────────────────────
+// ── VAT preset loader ───────────────────────
+async function loadVatPresets() {
+  const sel = document.getElementById('ftaxPreset');
+  if (!sel) return;
+  try {
+    const r = await fetch(`${API}?module=products&action=get_tax_presets`);
+    const d = await r.json();
+    const presets = d.data || [];
+    sel.innerHTML = '<option value="">— Select preset —</option>' +
+      presets.map(t => `<option value="${t.rate}|${t.type === 'inclusive' ? 1 : 0}">${t.name} (${t.rate}% ${t.type})</option>`).join('');
+  } catch(_) {}
+}
+function applyVatPreset(val) {
+  if (!val) return;
+  const [rate, incl] = val.split('|');
+  const ftax = document.getElementById('ftax');
+  const fti  = document.getElementById('ftax_inclusive');
+  if (ftax) ftax.value = rate;
+  if (fti)  fti.value  = incl;
+}
+
+let _labelProducts = [];
+
+async function openLabelModal(ids) {
+  // ids = array of product IDs
+  const all  = await fetch(`${API}?module=products&action=list&per_page=500`).then(r=>r.json());
+  const pool = all.data?.data || all.data || [];
+  _labelProducts = pool.filter(p => ids.includes(Number(p.id)));
+  if (!_labelProducts.length) { toast('Product not found','error'); return; }
+  renderLabelPreview();
+  document.getElementById('labelModal').style.display = 'flex';
+}
+
+function renderLabelPreview() {
+  const size = document.getElementById('lblSize').value;   // 'sm'|'md'|'lg'
+  const qty  = Math.max(1, parseInt(document.getElementById('lblQty').value) || 1);
+  const show = { sm:[38,25], md:[58,35], lg:[80,50] }[size];
+  const wrap = document.getElementById('lblPreview');
+
+  const dims = {
+    sm: 'width:38mm;height:25mm;font-size:7pt',
+    md: 'width:58mm;height:35mm;font-size:8pt',
+    lg: 'width:80mm;height:50mm;font-size:9pt',
+  }[size];
+
+  let html = '';
+  for (const p of _labelProducts) {
+    for (let i = 0; i < qty; i++) {
+      const bc = p.barcode || p.sku || String(p.id).padStart(8,'0');
+      html += `<div class="lbl-sticker" style="${dims}" data-bc="${bc}" data-name="${p.name}" data-price="${parseFloat(p.selling_price||0).toFixed(2)}" data-sku="${p.sku||''}">
+        <div class="lbl-name">${p.name}</div>
+        <svg class="lbl-svg"></svg>
+        <div class="lbl-bc-num">${bc}</div>
+        <div class="lbl-price">৳${parseFloat(p.selling_price||0).toFixed(2)}</div>
+      </div>`;
+    }
+  }
+  wrap.innerHTML = html;
+
+  // Render barcodes with JsBarcode
+  wrap.querySelectorAll('.lbl-sticker').forEach(el => {
+    const svg = el.querySelector('.lbl-svg');
+    const bc  = el.dataset.bc;
+    try {
+      JsBarcode(svg, bc, {
+        format:      bc.length === 13 && /^\d+$/.test(bc) ? 'EAN13' : 'CODE128',
+        width:       size === 'sm' ? 1 : 1.5,
+        height:      size === 'sm' ? 20 : size === 'md' ? 28 : 36,
+        displayValue:false,
+        margin:      0,
+      });
+    } catch(e) {
+      JsBarcode(svg, bc, { format:'CODE128', width:1.5, height:28, displayValue:false, margin:0 });
+    }
+  });
+}
+
+function printLabels() {
+  const size = document.getElementById('lblSize').value;
+  const stickers = document.getElementById('lblPreview').innerHTML;
+  const css = `
+    @page { margin:3mm; }
+    body { margin:0; padding:0; font-family:'Inter',sans-serif; }
+    .lbl-wrap { display:flex; flex-wrap:wrap; gap:2mm; }
+    .lbl-sticker { display:inline-flex; flex-direction:column; align-items:center; justify-content:space-between;
+      border:0.3mm solid #ccc; border-radius:1mm; padding:1.5mm; box-sizing:border-box; overflow:hidden;
+      page-break-inside:avoid; }
+    .lbl-name { font-size:inherit; font-weight:700; text-align:center; max-width:100%;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.2; }
+    .lbl-svg { max-width:100%; }
+    .lbl-bc-num { font-size:6pt; color:#555; letter-spacing:.5px; }
+    .lbl-price { font-size:inherit; font-weight:800; margin-top:0.5mm; }
+  `;
+  const win = window.open('','_blank','width=700,height=500');
+  win.document.write(`<!DOCTYPE html><html><head><title>Labels</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>${css}</style></head>
+    <body><div class="lbl-wrap">${stickers}</div>
+    <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),800)}<\/script>
+    </body></html>`);
+  win.document.close();
+}
 </script>
+
+<!-- JsBarcode -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+<!-- Label Print Modal -->
+<div id="labelModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:12px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <h3 style="font-size:15px;font-weight:700">🖨 Print Labels</h3>
+      <button onclick="document.getElementById('labelModal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--t2)">×</button>
+    </div>
+    <div style="padding:16px 20px">
+      <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px">
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--t2);margin-bottom:6px">Label Size</label>
+          <select id="lblSize" onchange="renderLabelPreview()" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+            <option value="sm">Small — 38×25 mm</option>
+            <option value="md" selected>Medium — 58×35 mm</option>
+            <option value="lg">Large — 80×50 mm</option>
+          </select>
+        </div>
+        <div style="min-width:100px">
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--t2);margin-bottom:6px">Qty / Product</label>
+          <input type="number" id="lblQty" value="1" min="1" max="100" oninput="renderLabelPreview()"
+            style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Preview</div>
+      <div id="lblPreview" style="display:flex;flex-wrap:wrap;gap:6px;padding:14px;background:var(--bg);border-radius:8px;min-height:80px;justify-content:center"></div>
+    </div>
+    <div style="display:flex;gap:10px;padding:14px 20px;border-top:1px solid var(--border)">
+      <button onclick="document.getElementById('labelModal').style.display='none'"
+        style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
+      <button onclick="printLabels()"
+        style="flex:2;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:700">
+        🖨 Print
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

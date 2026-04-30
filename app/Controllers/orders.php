@@ -68,7 +68,7 @@ switch ($action) {
          COUNT(*)                       AS today_count,
          COALESCE(SUM(total),0)         AS today_revenue,
          COALESCE(AVG(total),0)         AS today_avg,
-         COALESCE(SUM(total-paid),0)    AS today_due
+         COALESCE(SUM(GREATEST(0, total-paid)),0) AS today_due
        FROM orders
        WHERE DATE(created_at)=? AND status != 'cancelled'", [$today]);
     Response::success($stats);

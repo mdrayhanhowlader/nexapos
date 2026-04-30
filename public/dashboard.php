@@ -164,6 +164,22 @@ tr:hover td{background:#fafafa}
   <header class="topbar">
     <h1>Dashboard</h1>
     <span class="topbar-date" id="topbar-date"></span>
+    <!-- Notification Bell -->
+    <div class="notif-wrap" id="notifWrap" style="position:relative">
+      <button class="notif-btn" title="Stock Alerts" id="dashBellBtn" style="background:none;border:none;cursor:pointer;width:36px;height:36px;border-radius:8px;display:grid;place-items:center;color:#6b7280;position:relative;transition:background .15s">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        <span id="dashNotifCount" style="display:none;position:absolute;top:4px;right:3px;min-width:16px;height:16px;border-radius:8px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;align-items:center;justify-content:center;padding:0 3px;line-height:1">0</span>
+      </button>
+      <div id="notifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:280px;background:#fff;border:1px solid #e2e5eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:600">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #e2e5eb;font-size:13px">
+          <strong style="color:#111827;font-weight:600">Low Stock Alerts</strong>
+          <a href="inventory.php" style="font-size:12px;color:#2563eb;font-weight:500">View all →</a>
+        </div>
+        <div id="dashNotifList" style="max-height:260px;overflow-y:auto">
+          <div style="padding:16px;text-align:center;color:#9ca3af;font-size:13px">Loading…</div>
+        </div>
+      </div>
+    </div>
     <a href="pos.php" class="tb-pos">
       <svg viewBox="0 0 24 24"><path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-1 11H5V10h14v8zM7 15h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zM3 5h18V3H3z"/></svg>
       Open POS
@@ -281,6 +297,40 @@ tr:hover td{background:#fafafa}
       </div>
     </div>
 
+    <!-- Top Products + Top Customers -->
+    <div class="bottom-grid" style="margin-top:16px">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Top Products</div>
+            <div class="card-sub">Best sellers this period</div>
+          </div>
+          <a href="reports.php" style="font-size:12px;color:var(--accent);font-weight:500">Full report →</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Product</th><th>Qty Sold</th><th>Revenue</th></tr></thead>
+            <tbody id="topProductsBody"><tr><td colspan="4"><div class="loading"><div class="spin"></div></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Top Customers</div>
+            <div class="card-sub">Highest spend this period</div>
+          </div>
+          <a href="customers.php" style="font-size:12px;color:var(--accent);font-weight:500">View all →</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Customer</th><th>Orders</th><th>Total Spent</th></tr></thead>
+            <tbody id="topCustsBody"><tr><td colspan="3"><div class="loading"><div class="spin"></div></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -316,7 +366,7 @@ function quickRange(type){
 async function loadAll(){
   const from=document.getElementById('fromDate').value;
   const to=document.getElementById('toDate').value;
-  await Promise.all([loadKPIs(from,to),loadCharts(from,to),loadRecentOrders(),loadLowStock()]);
+  await Promise.all([loadKPIs(from,to),loadCharts(from,to),loadRecentOrders(),loadLowStock(),loadTopProducts(from,to),loadTopCustomers(from,to)]);
 }
 
 async function loadKPIs(from,to){
@@ -424,6 +474,18 @@ async function loadLowStock(){
   const res=await api('../routes/api.php?module=products&action=low_stock');
   const items=res.data||[];
   const el=document.getElementById('lowStockList');
+  // Also update notification bell badge
+  const cEl=document.getElementById('dashNotifCount');
+  const lEl=document.getElementById('dashNotifList');
+  if(items.length){
+    cEl.textContent=items.length>99?'99+':items.length;
+    cEl.style.display='flex';
+    if(lEl)lEl.innerHTML=items.slice(0,8).map(i=>
+      `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:13px"><div style="font-weight:500;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${i.name}</div><div style="font-weight:700;color:#ef4444;font-size:12px;margin-left:8px">${parseFloat(i.stock).toFixed(0)} left</div></div>`
+    ).join('')+(items.length>8?`<div style="padding:8px 14px;font-size:12px;color:#9ca3af;text-align:center">+${items.length-8} more</div>`:'');
+  } else {
+    if(lEl)lEl.innerHTML='<div style="padding:20px;text-align:center;color:#10b981;font-size:13px">✓ All stock levels healthy</div>';
+  }
   if(!items.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">✓ All stock levels healthy</div>';return;}
   el.innerHTML=items.slice(0,8).map(i=>`
     <div class="ls-item">
@@ -431,6 +493,44 @@ async function loadLowStock(){
       <div class="ls-qty">${parseFloat(i.stock).toFixed(0)} left</div>
     </div>`).join('');
 }
+
+async function loadTopProducts(from,to){
+  const res=await api(`../routes/api.php?module=reports&action=top_products&from=${from}&to=${to}&limit=6`);
+  const rows=res.data||[];
+  const fmt=v=>'৳'+parseFloat(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('topProductsBody').innerHTML=rows.length
+    ?rows.map((r,i)=>`<tr>
+        <td style="font-weight:700;color:var(--text3);font-size:12px">${i+1}</td>
+        <td style="font-weight:600;color:var(--text1)">${r.name}</td>
+        <td>${parseFloat(r.qty_sold).toFixed(0)}</td>
+        <td style="font-weight:700">${fmt(r.revenue)}</td>
+      </tr>`).join('')
+    :`<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text3);font-size:13px">No sales data in this period</td></tr>`;
+}
+
+async function loadTopCustomers(from,to){
+  const res=await api(`../routes/api.php?module=reports&action=customer_report&from=${from}&to=${to}`);
+  const rows=(res.data||[]).slice(0,6);
+  const fmt=v=>'৳'+parseFloat(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('topCustsBody').innerHTML=rows.length
+    ?rows.map(r=>`<tr>
+        <td style="font-weight:600;color:var(--text1)">${r.name}</td>
+        <td>${r.orders}</td>
+        <td style="font-weight:700">${fmt(r.spent)}</td>
+      </tr>`).join('')
+    :`<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--text3);font-size:13px">No customer data in this period</td></tr>`;
+}
+
+// Notification bell toggle
+document.getElementById('dashBellBtn')?.addEventListener('click', function(e){
+  e.stopPropagation();
+  const p=document.getElementById('notifPanel');
+  p.style.display=p.style.display==='block'?'none':'block';
+});
+document.addEventListener('click', function(e){
+  if(!document.getElementById('notifWrap')?.contains(e.target))
+    document.getElementById('notifPanel').style.display='none';
+});
 
 loadAll();
 </script>

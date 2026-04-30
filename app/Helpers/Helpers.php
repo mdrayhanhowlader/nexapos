@@ -148,6 +148,25 @@ function is_ajax(): bool
 
 function app_url(string $path = ''): string
 {
+    // Auto-detect base URL from current request so ngrok / any domain works
+    if (isset($_SERVER['HTTP_HOST'])) {
+        $scheme  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        // ngrok always sends https via its own header
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
+        }
+        $host    = $_SERVER['HTTP_HOST'];
+        $script  = $_SERVER['SCRIPT_NAME'] ?? '';
+        // Walk up from current file to find the nexapos root segment in the URL
+        // e.g. /nexapos/public/login.php → base = /nexapos
+        $parts   = explode('/', trim($script, '/'));
+        $base    = '';
+        foreach ($parts as $part) {
+            if (strtolower($part) === 'public') break;
+            $base .= '/' . $part;
+        }
+        return $scheme . '://' . $host . rtrim($base, '/') . '/' . ltrim($path, '/');
+    }
     return rtrim(Config::app('url'), '/') . '/' . ltrim($path, '/');
 }
 

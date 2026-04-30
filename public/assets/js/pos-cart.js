@@ -48,7 +48,8 @@ const POSCart = {
         unit:            product.unit    || 'pcs',
         unit_price:      parseFloat(product.selling_price || product.price),
         quantity:        1,
-        tax_rate:        parseFloat(product.tax_rate || 0),
+        // Per-product rate; fall back to the global default from Settings
+        tax_rate:        parseFloat(product.tax_rate) || (window.NEXAPOS?.taxRate || 0),
         tax_inclusive:   product.tax_inclusive ?? 1,
         discount_amount: 0,
         track_stock:     product.track_stock ?? 1,
@@ -193,12 +194,28 @@ const POSCart = {
       if (discDisp) discDisp.textContent = '-' + POS.fmt(POS.discount.amount);
     }
 
-    // Tax row
+    // Points redemption row
+    const ptsRow  = document.getElementById('ptsDiscRow');
+    const ptsDisp = document.getElementById('ptsDiscDisp');
+    if (ptsRow) {
+      const ptsAmt = (POS.redeemPoints || 0) * (window.NEXAPOS?.pointsValue || 0);
+      ptsRow.style.display = POS.redeemPoints > 0 ? 'flex' : 'none';
+      if (ptsDisp) ptsDisp.textContent = '-' + POS.fmt(ptsAmt) + ` (${POS.redeemPoints} pts)`;
+    }
+
+    // VAT row
     const taxRow  = document.getElementById('taxRow');
     const taxDisp = document.getElementById('taxDisp');
+    const taxLbl  = document.getElementById('taxRowLabel');
     if (taxRow) {
       taxRow.style.display = tax > 0 ? 'flex' : 'none';
       if (taxDisp) taxDisp.textContent = POS.fmt(tax);
+      if (taxLbl) {
+        const lbl  = window.NEXAPOS?.vatLabel || 'VAT';
+        const rate = POS.cart.length ? (POS.cart[0].tax_rate || window.NEXAPOS?.taxRate || 0) : (window.NEXAPOS?.taxRate || 0);
+        const incl = POS.cart.length ? (POS.cart[0].tax_inclusive ?? (window.NEXAPOS?.vatInclDefault ? 1 : 0)) : 0;
+        taxLbl.textContent = `${lbl} (${rate}%${incl ? ' incl.' : ''})`;
+      }
     }
 
     // Checkout button

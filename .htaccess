@@ -1,0 +1,4 @@
+Options -Indexes
+
+# Allow public/ folder freely — web app lives there
+# app/, config/, routes/ have their own .htaccess protection

@@ -1,0 +1,3 @@
+# api.php must remain accessible for AJAX calls
+# Only block direct folder listing
+Options -Indexes

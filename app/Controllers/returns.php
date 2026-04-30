@@ -128,7 +128,8 @@ switch ($action) {
         foreach ($items as $item) {
             $oi       = DB::fetch("SELECT * FROM order_items WHERE id=?", [(int)$item['order_item_id']]);
             $qty      = (float)$item['quantity'];
-            $refundTotal += round($qty * $oi['unit_price'], 2);
+            $netPrice = (float)$oi['unit_price'] - (float)($oi['discount_amount'] ?? 0);
+            $refundTotal += round($qty * $netPrice, 2);
         }
 
         $returnId = DB::transaction(function() use (
@@ -149,8 +150,9 @@ switch ($action) {
 
             foreach ($items as $item) {
                 $oi      = DB::fetch("SELECT * FROM order_items WHERE id=?", [(int)$item['order_item_id']]);
-                $qty     = (float)$item['quantity'];
-                $subtotal = round($qty * $oi['unit_price'], 2);
+                $qty      = (float)$item['quantity'];
+                $netPrice = (float)$oi['unit_price'] - (float)($oi['discount_amount'] ?? 0);
+                $subtotal = round($qty * $netPrice, 2);
 
                 DB::insert('return_items', [
                     'return_id'     => $rid,
@@ -158,7 +160,7 @@ switch ($action) {
                     'product_id'    => $oi['product_id'],
                     'name'          => $oi['name'],
                     'quantity'      => $qty,
-                    'unit_price'    => $oi['unit_price'],
+                    'unit_price'    => $netPrice,
                     'subtotal'      => $subtotal,
                     'restock'       => $restock,
                 ]);
@@ -200,6 +202,37 @@ switch ($action) {
             )['v'];
             if ($totalReturned >= $totalOrdered) {
                 DB::update('orders', ['status' => 'refunded'], 'id=?', [$orderId]);
+            }
+
+            // ── Loyalty: deduct proportional points on return ─────────────────
+            $loyaltyEnabled = DB::fetch("SELECT value FROM settings WHERE `key`='loyalty_enabled'")['value'] ?? '0';
+            if ($loyaltyEnabled === '1' && !empty($order['customer_id'])) {
+                $earnRow = DB::fetch(
+                    "SELECT points FROM loyalty_transactions WHERE order_id=? AND type='earn' LIMIT 1",
+                    [$orderId]
+                );
+                if ($earnRow && (int)$earnRow['points'] > 0) {
+                    $orderTotal  = (float)$order['total'];
+                    $ratio       = $orderTotal > 0 ? min(1.0, $refundTotal / $orderTotal) : 1.0;
+                    $deductPts   = (int)floor((int)$earnRow['points'] * $ratio);
+                    if ($deductPts > 0) {
+                        $custRow    = DB::fetch("SELECT loyalty_points FROM customers WHERE id=?", [$order['customer_id']]);
+                        $curBal     = $custRow ? (int)$custRow['loyalty_points'] : 0;
+                        $newBal     = max(0, $curBal - $deductPts);
+                        DB::insert('loyalty_transactions', [
+                            'customer_id'  => $order['customer_id'],
+                            'order_id'     => $orderId,
+                            'type'         => 'adjust',
+                            'points'       => -$deductPts,
+                            'balance_after'=> $newBal,
+                            'note'         => "Deducted on return {$ref}",
+                        ]);
+                        DB::query(
+                            "UPDATE customers SET loyalty_points = ? WHERE id=?",
+                            [$newBal, $order['customer_id']]
+                        );
+                    }
+                }
             }
 
             log_activity('create_return', 'returns', "Return {$ref} for order #{$orderId}", $rid);

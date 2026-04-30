@@ -71,41 +71,59 @@ const POSScanner = {
   },
 
   // ── Hardware barcode scanner detection ─────
-  // Hardware scanners type very fast (< 50ms per char)
+  // USB scanners act as a keyboard but type extremely fast (< 50ms/char).
+  // Strategy: collect characters; if Enter arrives and buffer built up fast → it's a scan.
   bindHardwareScanner() {
-    let lastKey = 0;
-    let buffer  = '';
+    let buffer      = '';
+    let bufferStart = 0;  // timestamp of first char in current burst
+    let flushTimer  = null;
 
-    document.addEventListener('keypress', e => {
-      const now     = Date.now();
-      const timeDiff = now - lastKey;
-      lastKey = now;
+    document.addEventListener('keydown', e => {
+      if (POS.inputMode === 'manual') return;
 
-      const active = document.activeElement;
-      const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+      // Let modals handle their own inputs
+      const active  = document.activeElement;
+      const inModal = active?.closest?.('.modal.open, .modal[style*="flex"]');
 
-      // If focus is on our search input, let bindSearchInput handle it
+      // If a payment/hold modal is open, don't intercept
+      if (inModal && active?.tagName === 'INPUT') return;
+
+      // If focused on our main search bar, bindSearchInput handles it
       if (active?.id === 'posSearch') return;
 
-      // If focus is on other input, ignore
-      if (isInput) return;
-
       if (e.key === 'Enter') {
-        if (buffer.length >= 4) {
-          if (POS.inputMode !== 'manual') {
-            POSCart.addByBarcode(buffer);
-          }
+        clearTimeout(flushTimer);
+        const elapsed = Date.now() - bufferStart;
+        // Valid scan: >= 4 chars, whole burst < 400ms (scanner speed)
+        if (buffer.length >= 4 && elapsed < 400) {
+          const code = buffer;
+          buffer = '';
+          e.preventDefault();
+          POSCart.addByBarcode(code);
+        } else {
+          buffer = '';
         }
-        buffer = '';
         return;
       }
 
-      // Fast typing = scanner (< 50ms between keystrokes)
-      if (timeDiff < 50) {
-        buffer += e.key;
-      } else {
-        buffer = e.key;
-      }
+      // Only collect printable single chars
+      if (e.key.length !== 1) return;
+
+      if (!buffer) bufferStart = Date.now();
+      buffer += e.key;
+
+      // Auto-flush if no Enter within 200ms (some scanners omit Enter)
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => {
+        const elapsed = Date.now() - bufferStart;
+        if (buffer.length >= 4 && elapsed < 300) {
+          const code = buffer;
+          buffer = '';
+          POSCart.addByBarcode(code);
+        } else {
+          buffer = '';
+        }
+      }, 200);
     });
   },
 

@@ -73,10 +73,28 @@ switch ($action) {
       'cash_drawer_auto'     => 'hardware',
       'cash_drawer_manual_btn'=> 'hardware',
       'cash_drawer_port'     => 'hardware',
+      'barcode_auto_scan'    => 'hardware',
+      'barcode_manual_entry' => 'hardware',
       'loyalty_enabled'      => 'loyalty',
       'points_per_amount'    => 'loyalty',
       'points_value'         => 'loyalty',
       'qr_payment_enabled'   => 'payment',
+      // bKash API
+      'bkash_enabled'        => 'payment',
+      'bkash_sandbox'        => 'payment',
+      'bkash_app_key'        => 'payment',
+      'bkash_app_secret'     => 'payment',
+      'bkash_username'       => 'payment',
+      'bkash_password'       => 'payment',
+      // Nagad API
+      'nagad_enabled'        => 'payment',
+      'nagad_sandbox'        => 'payment',
+      'nagad_merchant_id'    => 'payment',
+      'nagad_merchant_key'   => 'payment',
+      'nagad_public_key'     => 'payment',
+      // VAT label
+      'vat_label'            => 'tax',
+      'tax_inclusive_default'=> 'tax',
     ];
 
     foreach ($allowed as $key => $group) {

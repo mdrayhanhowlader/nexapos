@@ -67,49 +67,287 @@ const POSPayment = {
     // Show/hide reference + mobile fields
     const refArea    = document.getElementById('payRefArea');
     const mobileArea = document.getElementById('payMobileArea');
+    const refLbl     = document.getElementById('payRefLabel');
     if (refArea)    refArea.style.display    = method.type !== 'cash' ? 'block' : 'none';
     if (mobileArea) mobileArea.style.display = method.type === 'mobile_banking' ? 'block' : 'none';
+    if (refLbl) {
+      if (method.type === 'mobile_banking') refLbl.textContent = 'Transaction ID (TrxID)';
+      else if (method.type === 'card')      refLbl.textContent = 'Card Transaction ID';
+      else if (method.type === 'bank_transfer') refLbl.textContent = 'Transfer Reference';
+      else refLbl.textContent = 'Reference';
+    }
 
-    // Show merchant account info
-    const infoBox  = document.getElementById('payMerchantInfo');
-    const numEl    = document.getElementById('payMerchantNumber');
-    const lblEl    = document.getElementById('payMerchantLabel');
-    const instEl   = document.getElementById('payMerchantInstructions');
+    // ── Merchant info box ──────────────────────
+    const infoBox    = document.getElementById('payMerchantInfo');
+    const header     = document.getElementById('payMethodHeader');
+    const iconEl     = document.getElementById('payMethodIcon');
+    const lblEl      = document.getElementById('payMerchantLabel');
+    const numEl      = document.getElementById('payMerchantNumber');
+    const qrWrap     = document.getElementById('payQRWrap');
+    const qrImg      = document.getElementById('payQRImg');
+    const instBox    = document.getElementById('payInstructionBox');
     if (!infoBox) return;
 
     if (method.type === 'cash') {
       infoBox.style.display = 'none';
-    } else if (method.account_number) {
-      const labels = {
-        mobile_banking: `Customer sends to (${method.name})`,
-        bank_transfer:  'Bank Account',
-        card:           'Card Reference',
-      };
-      lblEl.textContent  = labels[method.type] || method.name;
-      numEl.textContent  = method.account_number;
-      instEl.textContent = method.instructions || '';
-      infoBox.style.borderColor = method.color || 'var(--accent)';
-      infoBox.style.background  = method.color ? method.color + '15' : 'var(--accent-bg)';
-      lblEl.style.color         = method.color || 'var(--accent)';
-      infoBox.style.display     = 'block';
-    } else if (method.type === 'card') {
-      lblEl.textContent  = 'Card Payment';
-      numEl.textContent  = 'Use physical card terminal';
-      instEl.textContent = method.instructions || 'Swipe / tap card on terminal, then enter transaction ID above';
-      infoBox.style.borderColor = '#2563eb';
-      infoBox.style.background  = '#eff6ff';
-      lblEl.style.color         = '#2563eb';
-      infoBox.style.display     = 'block';
-    } else {
-      // No account number set — show a hint to configure
-      lblEl.textContent  = method.name;
-      numEl.textContent  = method.instructions || 'No account number configured';
-      instEl.textContent = method.instructions ? '' : 'Go to Settings → Payment to add merchant number';
-      infoBox.style.borderColor = 'var(--border)';
-      infoBox.style.background  = 'var(--bg)';
-      lblEl.style.color         = 'var(--text2)';
-      infoBox.style.display     = 'block';
+      return;
     }
+
+    // ── Build instruction text per method ─────
+    const instructions = this._buildInstructions(method);
+
+    // ── Icons per type ─────────────────────────
+    const typeIcons = {
+      mobile_banking: '📱',
+      card:           '💳',
+      bank_transfer:  '🏦',
+      credit:         '💰',
+    };
+
+    const color = method.color || '#64748b';
+
+    // Header background = method brand color
+    if (header) {
+      header.style.background = color;
+    }
+
+    // Icon
+    if (iconEl) iconEl.textContent = typeIcons[method.type] || '💰';
+
+    // Label
+    if (lblEl) {
+      if (method.type === 'mobile_banking') {
+        lblEl.textContent = `${method.name} Payment করুন`;
+      } else if (method.type === 'card') {
+        lblEl.textContent = 'Card Payment';
+      } else if (method.type === 'bank_transfer') {
+        lblEl.textContent = 'Bank Transfer';
+      } else {
+        lblEl.textContent = method.name;
+      }
+    }
+
+    // Merchant number
+    if (numEl) {
+      if (method.account_number) {
+        numEl.textContent = method.account_number;
+        numEl.style.display = 'block';
+      } else if (method.type === 'card') {
+        numEl.textContent = 'Use card terminal';
+        numEl.style.display = 'block';
+      } else {
+        numEl.textContent = 'Number not configured — Go to Settings → Payment';
+        numEl.style.fontSize = '12px';
+        numEl.style.display = 'block';
+      }
+    }
+
+    // QR code image
+    if (qrWrap && qrImg) {
+      const qrPath = method.qr_image || null;
+      const qrOn   = method.qr_enabled && qrPath;
+      if (qrOn) {
+        // Stored path is relative to web root (e.g. nexapos/public/uploads/qr/...)
+        qrImg.src  = '/' + qrPath;
+        qrImg.onerror = () => { qrWrap.style.display = 'none'; };
+        qrWrap.style.display = 'block';
+      } else {
+        qrWrap.style.display = 'none';
+      }
+    }
+
+    // Instruction strip below header
+    if (instBox) {
+      if (instructions) {
+        instBox.innerHTML    = instructions;
+        instBox.style.display = 'block';
+      } else {
+        instBox.style.display = 'none';
+      }
+    }
+
+    infoBox.style.border  = 'none';
+    infoBox.style.display = 'block';
+
+    // ── MFS API: show "Pay via API" button if enabled ──
+    this._renderMfsApiButton(method);
+  },
+
+  // ── MFS API button ─────────────────────────
+  _mfsPollTimer: null,
+  _mfsPaymentID:  null,
+  _mfsRefId:      null,
+  _mfsMethod:     null,
+
+  _renderMfsApiButton(method) {
+    const slug      = method.slug || method.name.toLowerCase();
+    const bkashApi  = window.NEXAPOS?.bkashApiEnabled && slug === 'bkash';
+    const nagadApi  = window.NEXAPOS?.nagadApiEnabled && slug === 'nagad';
+    const apiEl     = document.getElementById('mfsApiBtn');
+    if (!apiEl) return;
+    if (bkashApi || nagadApi) {
+      apiEl.style.display = 'block';
+      apiEl.innerHTML = `
+        <button onclick="POSPayment.initMfsPayment()" style="
+          width:100%;padding:11px;border:none;border-radius:8px;
+          background:${method.color || '#e91e63'};color:#fff;
+          font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;
+          display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px">
+          📱 ${method.name} দিয়ে Pay করুন (Auto-Confirm)
+        </button>
+        <div id="mfsApiStatus" style="display:none;margin-top:10px"></div>`;
+    } else {
+      apiEl.style.display = 'none';
+      apiEl.innerHTML = '';
+    }
+  },
+
+  async initMfsPayment() {
+    const total  = POS.getTotal();
+    const inv    = 'POS-' + Date.now();
+    const method = POS.selPayments[0];
+    const m      = POS.payMethods.find(x => x.id == method?.method_id);
+    const slug   = m ? (m.slug || m.name.toLowerCase()) : '';
+    const fd     = new FormData();
+    fd.append('amount',  total.toFixed(2));
+    fd.append('invoice', inv);
+
+    const statusEl = document.getElementById('mfsApiStatus');
+    if (statusEl) { statusEl.style.display='block'; statusEl.innerHTML='<span style="color:#6b7280">⏳ Payment request পাঠানো হচ্ছে…</span>'; }
+
+    try {
+      let res;
+      if (slug === 'bkash') {
+        res = await POS.postFD(`${POS.API}?module=mfs&action=bkash_create`, fd);
+      } else {
+        res = await POS.postFD(`${POS.API}?module=mfs&action=nagad_create`, fd);
+      }
+
+      if (!res.success) {
+        if (statusEl) statusEl.innerHTML = `<span style="color:#dc2626">❌ ${res.message}</span>`;
+        return;
+      }
+
+      const d = res.data;
+      this._mfsPaymentID = d.paymentID || d.refId || null;
+      this._mfsRefId     = d.refId     || null;
+      this._mfsMethod    = slug;
+
+      if (statusEl) {
+        let inner = '';
+        if (d.bkashURL || d.redirectUrl) {
+          const url = d.bkashURL || d.redirectUrl;
+          inner += `<div style="text-align:center;padding:8px 0">
+            <a href="${url}" target="_blank" style="display:inline-block;background:#e91e63;color:#fff;padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">
+              📱 ${slug === 'bkash' ? 'bKash' : 'Nagad'} App-এ Pay করুন
+            </a>
+            <div style="font-size:11px;color:#6b7280;margin-top:6px">অথবা নিচের QR স্ক্যান করুন</div>
+          </div>`;
+        }
+        inner += `<div style="text-align:center;padding:6px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">
+          <div style="font-size:12px;color:#374151;margin-bottom:6px">⏳ Payment-এর জন্য অপেক্ষা করছি…</div>
+          <div class="mfs-dots"><span>•</span><span>•</span><span>•</span></div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:4px">Auto-confirm হবে — refresh করতে হবে না</div>
+        </div>`;
+        statusEl.innerHTML = inner;
+      }
+
+      // Start polling
+      clearInterval(this._mfsPollTimer);
+      let attempts = 0;
+      this._mfsPollTimer = setInterval(async () => {
+        attempts++;
+        if (attempts > 60) { clearInterval(this._mfsPollTimer); return; } // 3 min timeout
+
+        try {
+          let pollRes;
+          if (slug === 'bkash') {
+            pollRes = await POS.get(`${POS.API}?module=mfs&action=bkash_status&paymentID=${encodeURIComponent(this._mfsPaymentID)}`);
+          } else {
+            pollRes = await POS.get(`${POS.API}?module=mfs&action=nagad_verify&refId=${encodeURIComponent(this._mfsRefId)}`);
+          }
+
+          if (pollRes.success && pollRes.data?.completed) {
+            clearInterval(this._mfsPollTimer);
+            const trxID = pollRes.data.trxID || '';
+            // Auto-fill TrxID and mark verified
+            const refInp = document.getElementById('payRefInp');
+            if (refInp) refInp.value = trxID;
+            if (POS.selPayments[0]) POS.selPayments[0].reference = trxID;
+            if (statusEl) statusEl.innerHTML = `
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:16px;margin-bottom:4px">✅</div>
+                <div style="font-weight:700;color:#16a34a;font-size:13px">Payment Confirmed!</div>
+                <div style="font-size:11px;color:#6b7280;margin-top:2px">TrxID: ${trxID}</div>
+              </div>`;
+            POS.toast(`✅ Payment confirmed — TrxID: ${trxID}`, 'success');
+            // Auto-proceed if amount matches
+            setTimeout(() => this.process(), 800);
+          }
+        } catch(_) {}
+      }, 3000);
+    } catch(e) {
+      if (statusEl) statusEl.innerHTML = `<span style="color:#dc2626">❌ ${e.message}</span>`;
+    }
+  },
+
+  // ── Build step-by-step instructions ────────
+  _buildInstructions(method) {
+    const num = method.account_number || '';
+
+    // Method-specific flows (Bangladesh mobile banking)
+    const flows = {
+      bkash: [
+        'bKash App খুলুন',
+        '<strong>Payment</strong> সিলেক্ট করুন',
+        `Merchant Number: <strong>${num || '...'}</strong>`,
+        `Amount: <strong>৳[total]</strong> দিন`,
+        'PIN দিয়ে Confirm করুন',
+        'TrxID উপরে লিখুন',
+      ],
+      nagad: [
+        'Nagad App খুলুন',
+        '<strong>Payment</strong> সিলেক্ট করুন',
+        `Merchant Number: <strong>${num || '...'}</strong>`,
+        `Amount: <strong>৳[total]</strong> দিন`,
+        'PIN দিয়ে Confirm করুন',
+        'TrxID উপরে লিখুন',
+      ],
+      rocket: [
+        'Rocket App খুলুন',
+        '<strong>Payment</strong> সিলেক্ট করুন',
+        `Merchant Number: <strong>${num || '...'}</strong>`,
+        `Amount: <strong>৳[total]</strong> দিন`,
+        'PIN দিয়ে Confirm করুন',
+        'TrxID উপরে লিখুন',
+      ],
+    };
+
+    const slug = (method.slug || method.name.toLowerCase());
+
+    // Use slug-based flow if available
+    if (flows[slug]) {
+      const total = POS.getTotal ? POS.getTotal().toFixed(2) : '';
+      const steps = flows[slug].map(s => s.replace('[total]', total));
+      return steps.map((s, i) => `<span style="display:inline-block;margin-right:8px;opacity:.7">${i+1}.</span>${s}`).join('<br>');
+    }
+
+    // Generic instructions from DB
+    if (method.instructions) {
+      return method.instructions.replace(/\n/g, '<br>');
+    }
+
+    // Card terminal hint
+    if (method.type === 'card') {
+      return 'Swipe or tap card on terminal → Enter transaction ID above';
+    }
+
+    // Bank transfer hint
+    if (method.type === 'bank_transfer' && num) {
+      return `Transfer to account <strong>${num}</strong> → Enter reference number above`;
+    }
+
+    return '';
   },
 
   // ── Numpad ─────────────────────────────────
@@ -185,18 +423,41 @@ const POSPayment = {
       btn.innerHTML  = '<div class="spin"></div> Processing...';
     }
 
-    const res = await POS.post(`${POS.API}?module=pos&action=checkout`, {
+    const checkoutPayload = {
       items:          POS.cart,
       payments:       POS.selPayments,
       customer_id:    POS.customer?.id   || null,
       discount_type:  POS.discount.type,
       discount_value: POS.discount.value,
+      redeem_points:  POS.redeemPoints   || 0,
       note:           document.getElementById('orderNote')?.value || '',
-    });
+    };
+
+    // Always try the server first — pre-flight offline checks are unreliable.
+    // If the request fails (network error / timeout) we fall back to offline below.
+    let res;
+    try {
+      res = await POS.post(`${POS.API}?module=pos&action=checkout`, checkoutPayload);
+    } catch (_) {
+      res = { success: false, message: 'Network error' };
+    }
 
     if (btn) {
       btn.disabled  = false;
       btn.innerHTML = 'Complete Sale';
+    }
+
+    // ── Network failed mid-request — save offline ──
+    if (!res.success && (res.message === 'Network error' || res.message === 'Offline')) {
+      if (typeof POSOffline !== 'undefined') {
+        const saved = await POSOffline.saveOrder(checkoutPayload);
+        POS.closeModal('payModal');
+        POSCart.clear();
+        POS.toast(`Connection lost — sale saved offline (${saved.local_invoice})`, 'warning');
+        this._processing = false;
+        POSModals.loadHeldCount();
+        return;
+      }
     }
 
     if (!res.success) {
@@ -208,6 +469,12 @@ const POSPayment = {
     const orderId = res.data ? parseInt(res.data.order_id) : null;
     POS.lastOrderId = orderId;
 
+    // Cache updated products/methods for next offline session
+    if (typeof POSOffline !== 'undefined') {
+      POSOffline._cacheProducts();
+      POSOffline._cachePaymentMethods();
+    }
+
     // Cash drawer — open if enabled + auto + server says open
     if (res.data?.open_drawer && window.NEXAPOS?.drawerEnabled) {
       if (window.NEXAPOS.drawerAuto) {
@@ -215,8 +482,23 @@ const POSPayment = {
       }
     }
 
+    // Stop any MFS polling
+    clearInterval(this._mfsPollTimer);
+    this._mfsPaymentID = null;
+    this._mfsRefId     = null;
+
+    POS.redeemPoints = 0;
     POS.closeModal('payModal');
     POSCart.clear();
+
+    // Show loyalty points toast if earned
+    if (res.data?.points_earned > 0) {
+      POS.toast(
+        `★ Earned ${res.data.points_earned} pts — Balance: ${res.data.points_balance} pts`,
+        'success', 5000
+      );
+    }
+
     if (orderId) {
       setTimeout(() => {
         POSModals.showReceipt(orderId);

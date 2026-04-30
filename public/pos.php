@@ -335,6 +335,9 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
 .toast.error{background:var(--red)}
 .toast.warning{background:var(--yellow)}
 @keyframes toastIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+.mfs-dots span{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6b7280;margin:0 2px;animation:mfsBounce .6s infinite alternate}
+.mfs-dots span:nth-child(2){animation-delay:.2s}.mfs-dots span:nth-child(3){animation-delay:.4s}
+@keyframes mfsBounce{from{opacity:.3;transform:translateY(0)}to{opacity:1;transform:translateY(-4px)}}
 
 /* Shortcut bar */
 #shortcutBar{
@@ -446,10 +449,49 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
         <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-1 11H5V10h14v8zM7 15h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zM3 5h18V3H3z"/></svg>
         Drawer
       </button>
+      <!-- Offline badge (shown when offline) -->
+      <div id="offlineBadge" style="display:none;align-items:center;gap:5px;
+           background:#f97316;color:#fff;border-radius:6px;padding:4px 10px;
+           font-size:12px;font-weight:700;cursor:default" title="No internet connection — sales saved locally">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px">
+          <path d="M22.99 9C19.15 5.16 13.8 3.76 8.84 4.78L11 6.94c3.23-.6 6.68.4 9.15 2.87l2.84-2.81zM19 12.99c-1.29-1.29-2.87-2.12-4.54-2.5L17 13.02l.01-.03h1.99zM2 3.05L3.05 2 22 20.95 20.95 22l-3.62-3.62c-1.05.39-2.18.62-3.33.62-2.17 0-4.35-.83-6-2.48l2.83-2.83c.87.86 2 1.31 3.17 1.31.8 0 1.59-.22 2.28-.63L14 11.6V12c-1.35 0-2.57.5-3.5 1.32L8 10.81c.4-.33.84-.62 1.3-.88L6.55 7.18C5 7.99 3.6 9.09 2.46 10.22L.01 7.77C.67 7.11 1.32 6.55 2 6.05V3.05zM12 22l-3-3c.78-.78 1.86-1.26 3-1.26s2.22.48 3 1.26L12 22z"/>
+        </svg>
+        OFFLINE
+      </div>
+      <!-- Sync pending orders button (shown when pending > 0) -->
+      <div id="syncWrap" style="display:none;align-items:center;gap:5px">
+        <button class="tb-btn" id="syncBtn" onclick="POSOffline.syncPending()" title="Sync offline orders to server"
+                style="background:var(--accent);color:#fff;gap:5px">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px">
+            <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0020 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 004 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+          </svg>
+          Sync <span id="pendingCount" style="background:rgba(255,255,255,.25);border-radius:10px;padding:1px 6px;font-size:11px">0</span>
+        </button>
+        <button class="tb-btn" onclick="POSOffline.showPendingModal()" title="View pending offline orders" style="padding:6px 8px">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+        </button>
+      </div>
       <div class="tb-div"></div>
       <div class="tb-user">
         <div class="tb-ava"><?= strtoupper(substr($user['name'] ?? 'A', 0, 1)) ?></div>
         <span class="tb-uname"><?= htmlspecialchars($user['name'] ?? 'Admin') ?></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offline pending orders modal -->
+  <div id="offlinePendingModal" class="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-box" style="max-width:480px">
+      <div class="modal-head">
+        <span>Pending Offline Orders</span>
+        <button class="modal-close" onclick="document.getElementById('offlinePendingModal').style.display='none'">✕</button>
+      </div>
+      <div id="offlinePendingList" style="max-height:360px;overflow-y:auto"></div>
+      <div style="padding:14px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary" onclick="document.getElementById('offlinePendingModal').style.display='none'">Close</button>
+        <button class="btn btn-primary" onclick="POSOffline.syncPending();document.getElementById('offlinePendingModal').style.display='none'">
+          Sync Now
+        </button>
       </div>
     </div>
   </div>
@@ -523,7 +565,8 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
       <div id="cartSummary">
         <div class="sum-row"><span>Subtotal</span><span id="subtotalDisp">৳0.00</span></div>
         <div class="sum-row" id="discRow"><span>Discount</span><span id="discDisp">-৳0.00</span></div>
-        <div class="sum-row" id="taxRow"><span>Tax (<?= $taxRate ?>%)</span><span id="taxDisp">৳0.00</span></div>
+        <div class="sum-row" id="ptsDiscRow" style="display:none;color:var(--green)"><span>Points Discount</span><span id="ptsDiscDisp">-৳0.00</span></div>
+        <div class="sum-row" id="taxRow"><span id="taxRowLabel">VAT</span><span id="taxDisp">৳0.00</span></div>
         <div class="sum-row sum-tot"><span>Total</span><span id="totalDisp">৳0.00</span></div>
       </div>
 
@@ -531,6 +574,9 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
         <div class="ca-row">
           <button class="btn-hold" onclick="POSModals.holdOrder()">⏸ Hold</button>
           <button class="btn-disc" onclick="POSModals.openDiscount()">🏷 Discount</button>
+          <?php if ((DB::fetch("SELECT value FROM settings WHERE `key`='loyalty_enabled'")['value'] ?? '0') === '1'): ?>
+          <button class="btn-disc" onclick="POSModals.openPointsRedemption()" title="Redeem loyalty points">★ Pts</button>
+          <?php endif; ?>
         </div>
         <button class="btn-chk" id="checkoutBtn" disabled onclick="POSPayment.open()">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
@@ -583,16 +629,33 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
         <span style="font-size:22px;font-weight:700;color:var(--accent)" id="payTotalDisp">৳0.00</span>
       </div>
       <div class="pay-grid" id="payGrid"></div>
-      <!-- Merchant info: shown when bKash/Nagad/Card/Bank selected -->
-      <div id="payMerchantInfo" style="display:none;margin:10px 0;padding:14px 16px;background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:10px">
-        <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px" id="payMerchantLabel">Send to</div>
-        <div style="font-size:20px;font-weight:700;color:var(--text1);letter-spacing:1px" id="payMerchantNumber"></div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px" id="payMerchantInstructions"></div>
+      <!-- Merchant payment info box -->
+      <div id="payMerchantInfo" style="display:none;margin:10px 0;border-radius:12px;overflow:hidden;border:1.5px solid var(--border)">
+        <!-- Header strip -->
+        <div id="payMethodHeader" style="padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <div id="payMethodIcon" style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.6px" id="payMerchantLabel">Payment</div>
+            <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:.5px" id="payMerchantNumber"></div>
+          </div>
+          <!-- QR code (if available) -->
+          <div id="payQRWrap" style="display:none;flex-shrink:0">
+            <img id="payQRImg" src="" alt="QR" style="width:64px;height:64px;border-radius:8px;background:#fff;padding:3px;display:block">
+          </div>
+        </div>
+        <!-- Instruction strip -->
+        <div id="payInstructionBox" style="display:none;padding:8px 14px;background:rgba(0,0,0,.15);font-size:12px;color:rgba(255,255,255,.85);line-height:1.5"></div>
       </div>
+
+      <!-- MFS API payment button (shown when bKash/Nagad API enabled) -->
+      <div id="mfsApiBtn" style="display:none"></div>
+
+      <!-- Transaction ref / TxID -->
       <div id="payRefArea" style="display:none" class="fg">
-        <label>Reference / Transaction ID</label>
-        <input type="text" class="fc" id="payRefInp" placeholder="e.g. TXN123456">
+        <label id="payRefLabel">Transaction ID</label>
+        <input type="text" class="fc" id="payRefInp" placeholder="e.g. 8A3X9Y2K">
       </div>
+      <!-- Customer mobile (optional) -->
       <div id="payMobileArea" style="display:none" class="fg">
         <label>Customer Mobile (optional)</label>
         <input type="text" class="fc" id="payMobileInp" placeholder="01XXXXXXXXX">
@@ -623,6 +686,31 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
 </div>
 
 <!-- Discount -->
+<!-- ══ ADD-ONS MODAL ══ -->
+<div class="modal" id="addonsModal">
+  <div class="mc" style="max-width:460px">
+    <div class="mh">
+      <h3 id="addonsModalTitle">Add-ons</h3>
+      <button class="mc-x" onclick="POSAddons.skip()">×</button>
+    </div>
+    <div class="mb" style="padding:0">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2)" id="addonsModalSub">
+        Select optional add-ons for this item
+      </div>
+      <div id="addonsListWrap" style="max-height:340px;overflow-y:auto;padding:10px 14px"></div>
+      <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;color:var(--text2)">
+          Add-ons total: <strong id="addonsTotalDisp" style="color:var(--accent)">৳0.00</strong>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="POSAddons.skip()" style="font-size:13px">Skip</button>
+          <button class="btn btn-primary"   onclick="POSAddons.confirm()" style="font-size:13px">Add to Cart</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="discModal">
   <div class="mc sm">
     <div class="mh"><h3>Apply Discount</h3><button class="mc-x" onclick="POS.closeModal('discModal')">×</button></div>
@@ -782,6 +870,30 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
   </div>
 </div>
 
+<!-- Points redemption modal -->
+<div class="modal" id="pointsModal">
+  <div class="mc" style="max-width:360px">
+    <div class="mh">
+      <h3>★ Redeem Loyalty Points</h3>
+      <button class="mc-x" onclick="POS.closeModal('pointsModal')">×</button>
+    </div>
+    <div class="mb">
+      <p id="ptsBalance" style="font-size:13px;color:var(--text2);margin-bottom:14px">0 pts available</p>
+      <div class="fg">
+        <label>Points to redeem</label>
+        <input type="number" class="fc" id="ptsRedeemInp" min="0" value="0" placeholder="Enter points">
+        <small id="ptsConvHint" style="color:var(--text3);font-size:11px;margin-top:4px;display:block">
+          Each point = <?= number_format((float)(DB::fetch("SELECT value FROM settings WHERE `key`='points_value'")['value'] ?? 0), 2) ?> ৳
+        </small>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn-s" onclick="POS.closeModal('pointsModal')">Cancel</button>
+      <button class="btn-p" onclick="POSModals.applyPointsRedemption()">Apply</button>
+    </div>
+  </div>
+</div>
+
 <!-- Config -->
 <script>
 window.NEXAPOS = {
@@ -795,6 +907,13 @@ window.NEXAPOS = {
   printerEnabled:  <?= (DB::fetch("SELECT value FROM settings WHERE `key`='thermal_printer'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
   autoPrint:       <?= (DB::fetch("SELECT value FROM settings WHERE `key`='receipt_auto_print'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
   qrEnabled:       <?= (DB::fetch("SELECT value FROM settings WHERE `key`='qr_payment_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  loyaltyEnabled:  <?= (DB::fetch("SELECT value FROM settings WHERE `key`='loyalty_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  pointsValue:     <?= json_encode((float)(DB::fetch("SELECT value FROM settings WHERE `key`='points_value'")['value'] ?? 0)) ?>,
+  pointsPerAmt:    <?= json_encode((float)(DB::fetch("SELECT value FROM settings WHERE `key`='points_per_amount'")['value'] ?? 0)) ?>,
+  vatLabel:        <?= json_encode(DB::fetch("SELECT value FROM settings WHERE `key`='vat_label'")['value'] ?? 'VAT') ?>,
+  vatInclDefault:  <?= (DB::fetch("SELECT value FROM settings WHERE `key`='tax_inclusive_default'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  bkashApiEnabled: <?= (DB::fetch("SELECT value FROM settings WHERE `key`='bkash_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
+  nagadApiEnabled: <?= (DB::fetch("SELECT value FROM settings WHERE `key`='nagad_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
   user: { id: <?= json_encode($user['id'] ?? 0) ?>, name: <?= json_encode($user['name'] ?? '') ?> }
 };
 </script>
@@ -807,10 +926,27 @@ window.NEXAPOS = {
 <script src="/nexapos/public/assets/js/pos-payment.js?v=<?= time() ?>"></script>
 <script src="/nexapos/public/assets/js/pos-modals.js?v=<?= time() ?>"></script>
 <script src="/nexapos/public/assets/js/pos-printer.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-offline.js?v=<?= time() ?>"></script>
+<script src="/nexapos/public/assets/js/pos-addons.js?v=<?= time() ?>"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/nexapos/sw.js').catch(()=>{});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/nexapos/sw.js').then(reg => {
+      // Register background sync when going back online
+      window.addEventListener('online', () => {
+        if (reg.sync) reg.sync.register('sync-pending-orders').catch(() => {});
+      });
+    }).catch(() => {});
+
+    // Listen for SW messages (background sync trigger)
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'SYNC_ORDERS') POSOffline.syncPending();
+    });
+  }
+
+  // Init offline module
+  POSOffline.init();
 
   // Printer init
   POSPrinter.init();
@@ -831,6 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
   POSProducts.loadCategories();
   POSPayment.loadMethods();
   POSModals.loadHeldCount();
+  POS.loadScannerMode().then(() => POS.applyInputMode());
   POSProducts.load();
 
   // Block Enter in payment modal

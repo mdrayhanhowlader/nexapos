@@ -3,6 +3,10 @@ $db = DB::connect();
 
 switch ($action) {
 
+    case 'ping':
+        Response::success(['ts' => time()]);
+        break;
+
     case 'dashboard_stats':
         $today = date('Y-m-d');
         Response::success([
@@ -50,6 +54,18 @@ switch ($action) {
 
     case 'get_payment_methods':
         $rows = DB::fetchAll("SELECT * FROM payment_methods WHERE is_active=1 ORDER BY sort_order");
+        // Attach QR images + enabled flag from settings table
+        $qrEnabled = (bool)(DB::fetch("SELECT value FROM settings WHERE `key`='qr_payment_enabled'")['value'] ?? 0);
+        $qrKeys    = ['bkash' => 'bkash_qr_image', 'nagad' => 'nagad_qr_image', 'rocket' => 'rocket_qr_image'];
+        foreach ($rows as &$row) {
+            $row['qr_enabled'] = $qrEnabled;
+            $row['qr_image']   = null;
+            if (isset($qrKeys[$row['slug']])) {
+                $val = DB::fetch("SELECT value FROM settings WHERE `key`=?", [$qrKeys[$row['slug']]]);
+                $row['qr_image'] = $val['value'] ?? null;
+            }
+        }
+        unset($row);
         Response::success($rows);
         break;
 
@@ -61,34 +77,68 @@ switch ($action) {
         if (empty($items))    Response::error('Cart is empty');
         if (empty($payments)) Response::error('No payment selected');
 
-        $result = DB::transaction(function() use ($payload, $items, $payments) {
+        // ── Load loyalty settings once (outside transaction for efficiency) ──
+        $loyaltyCfg = [
+            'enabled'        => DB::fetch("SELECT value FROM settings WHERE `key`='loyalty_enabled'")['value'] ?? '0',
+            'points_per_amt' => (float)(DB::fetch("SELECT value FROM settings WHERE `key`='points_per_amount'")['value'] ?? 0),
+            'points_value'   => (float)(DB::fetch("SELECT value FROM settings WHERE `key`='points_value'")['value'] ?? 0),
+        ];
+        $redeemPoints = (int)($payload['redeem_points'] ?? 0);
+
+        $result = DB::transaction(function() use ($payload, $items, $payments, $loyaltyCfg, $redeemPoints) {
             $customerId = $payload['customer_id'] ?? null;
             $discType   = $payload['discount_type']  ?? 'fixed';
             $discValue  = (float)($payload['discount_value'] ?? 0);
-            $subtotal   = 0; $taxTotal = 0;
+            $subtotal     = 0;
+            $taxDisplay   = 0;
+            $taxExclusive = 0;
 
             foreach ($items as &$item) {
-                $price   = (float)$item['unit_price'];
-                $qty     = (float)$item['quantity'];
-                $taxRate = (float)($item['tax_rate'] ?? 0);
-                $iDisc   = (float)($item['discount_amount'] ?? 0);
-                $lineSub = ($price - $iDisc) * $qty;
-                $taxAmt  = $lineSub * ($taxRate / 100);
-                $item['tax_amount'] = round($taxAmt, 2);
+                $price        = (float)$item['unit_price'];
+                $qty          = (float)$item['quantity'];
+                $taxRate      = (float)($item['tax_rate'] ?? 0);
+                $taxInclusive = (int)($item['tax_inclusive'] ?? 1);
+                $iDisc        = (float)($item['discount_amount'] ?? 0);
+                $lineSub      = ($price - $iDisc) * $qty;
+
+                if ($taxRate > 0 && $taxInclusive) {
+                    $taxAmt       = round($lineSub * $taxRate / (100 + $taxRate), 2);
+                    $taxDisplay  += $taxAmt;
+                } elseif ($taxRate > 0) {
+                    $taxAmt        = round($lineSub * $taxRate / 100, 2);
+                    $taxDisplay   += $taxAmt;
+                    $taxExclusive += $taxAmt;
+                } else {
+                    $taxAmt = 0;
+                }
+
+                $item['tax_amount'] = $taxAmt;
                 $item['subtotal']   = round($lineSub, 2);
-                $subtotal += $lineSub;
-                $taxTotal += $taxAmt;
+                $subtotal          += $lineSub;
             }
             unset($item);
 
             $discAmount    = $discType === 'percent' ? round($subtotal * ($discValue / 100), 2) : min((float)$discValue, $subtotal);
             $serviceCharge = (float)($payload['service_charge'] ?? 0);
-            $total         = round($subtotal - $discAmount + $taxTotal + $serviceCharge, 2);
-            $paid          = array_sum(array_column($payments, 'amount'));
-            $changeDue     = max(0, round($paid - $total, 2));
-            $due           = max(0, round($total - $paid, 2));
-            $invoiceNo     = generate_invoice();
-            $shift         = DB::fetch("SELECT id FROM shifts WHERE cashier_id=? AND status='open' LIMIT 1", [Auth::id()]);
+            $total         = round($subtotal - $discAmount + $taxExclusive + $serviceCharge, 2);
+
+            // ── Loyalty: apply points redemption as discount ──────────────────
+            $pointsDiscount = 0;
+            $actualRedeem   = 0;
+            if ($loyaltyCfg['enabled'] === '1' && $redeemPoints > 0
+                && $customerId && $loyaltyCfg['points_value'] > 0) {
+                $cust         = DB::fetch("SELECT loyalty_points FROM customers WHERE id=?", [$customerId]);
+                $available    = $cust ? (int)$cust['loyalty_points'] : 0;
+                $actualRedeem = min($redeemPoints, $available);
+                $pointsDiscount = min(round($actualRedeem * $loyaltyCfg['points_value'], 2), $total);
+                $total        = max(0, round($total - $pointsDiscount, 2));
+            }
+
+            $paid      = array_sum(array_column($payments, 'amount'));
+            $changeDue = max(0, round($paid - $total, 2));
+            $due       = max(0, round($total - $paid, 2));
+            $invoiceNo = generate_invoice();
+            $shift     = DB::fetch("SELECT id FROM shifts WHERE cashier_id=? AND status='open' LIMIT 1", [Auth::id()]);
 
             $orderId = DB::insert('orders', [
                 'invoice_no'      => $invoiceNo,
@@ -100,15 +150,17 @@ switch ($action) {
                 'subtotal'        => $subtotal,
                 'discount_type'   => $discType,
                 'discount_value'  => $discValue,
-                'discount_amount' => $discAmount,
-                'tax_amount'      => $taxTotal,
+                'discount_amount' => round($discAmount + $pointsDiscount, 2),
+                'tax_amount'      => $taxDisplay,
                 'service_charge'  => $serviceCharge,
                 'total'           => $total,
                 'paid'            => $paid,
                 'change_due'      => $changeDue,
-                'due'             => $due,
-                'note'            => $payload['note'] ?? '',
-                'shift_id'        => $shift['id'] ?? null,
+                'due'                  => $due,
+                'loyalty_points_used'  => $actualRedeem,
+                'loyalty_points_earned'=> 0, // updated after transaction calculates earned
+                'note'                 => $payload['note'] ?? '',
+                'shift_id'             => $shift['id'] ?? null,
             ]);
 
             foreach ($items as $item) {
@@ -161,16 +213,69 @@ switch ($action) {
             }
 
             if ($shift) DB::query("UPDATE shifts SET total_sales=total_sales+? WHERE id=?", [$total, $shift['id']]);
+
+            // ── Loyalty: earn points + deduct redeemed ────────────────────────
+            $earnedPoints  = 0;
+            $newPtsBalance = null;
+            if ($loyaltyCfg['enabled'] === '1' && $customerId) {
+                $custRow      = DB::fetch("SELECT loyalty_points FROM customers WHERE id=?", [$customerId]);
+                $curBalance   = $custRow ? (int)$custRow['loyalty_points'] : 0;
+
+                // Earn points on amount paid (after redemption discount)
+                if ($loyaltyCfg['points_per_amt'] > 0) {
+                    $earnedPoints = (int)floor($total * $loyaltyCfg['points_per_amt']);
+                }
+                $netChange     = $earnedPoints - $actualRedeem;
+                $newPtsBalance = max(0, $curBalance + $netChange);
+
+                if ($actualRedeem > 0) {
+                    $balAfterRedeem = max(0, $curBalance - $actualRedeem);
+                    DB::insert('loyalty_transactions', [
+                        'customer_id'  => $customerId,
+                        'order_id'     => $orderId,
+                        'type'         => 'redeem',
+                        'points'       => -$actualRedeem,
+                        'balance_after'=> $balAfterRedeem,
+                        'note'         => "Redeemed on order {$invoiceNo}",
+                    ]);
+                }
+                if ($earnedPoints > 0) {
+                    DB::insert('loyalty_transactions', [
+                        'customer_id'  => $customerId,
+                        'order_id'     => $orderId,
+                        'type'         => 'earn',
+                        'points'       => $earnedPoints,
+                        'balance_after'=> $newPtsBalance,
+                        'note'         => "Earned on order {$invoiceNo}",
+                    ]);
+                }
+                if ($netChange !== 0) {
+                    DB::query(
+                        "UPDATE customers SET loyalty_points = GREATEST(0, loyalty_points + ?) WHERE id=?",
+                        [$netChange, $customerId]
+                    );
+                }
+                // Update order with actual earned points
+                if ($earnedPoints > 0) {
+                    DB::query(
+                        "UPDATE orders SET loyalty_points_earned=? WHERE id=?",
+                        [$earnedPoints, $orderId]
+                    );
+                }
+            }
+
             log_activity('checkout', 'pos', "Order {$invoiceNo}", $orderId);
 
             return [
-                'order_id'    => $orderId,
-                'invoice_no'  => $invoiceNo,
-                'total'       => $total,
-                'paid'        => $paid,
-                'change_due'  => $changeDue,
-                'due'         => $due,
-                'open_drawer' => $openDrawer,
+                'order_id'       => $orderId,
+                'invoice_no'     => $invoiceNo,
+                'total'          => $total,
+                'paid'           => $paid,
+                'change_due'     => $changeDue,
+                'due'            => $due,
+                'open_drawer'    => $openDrawer,
+                'points_earned'  => $earnedPoints,
+                'points_balance' => $newPtsBalance,
             ];
         });
         Response::success($result, 'Sale completed');
@@ -285,12 +390,59 @@ switch ($action) {
         break;
 
     case 'get_shift_summary':
-        $shift = DB::fetch("SELECT * FROM shifts WHERE cashier_id=? AND status='open'", [Auth::id()]);
+        $shift = DB::fetch("SELECT s.*, u.name AS cashier_name FROM shifts s JOIN users u ON u.id=s.cashier_id WHERE s.cashier_id=? AND s.status='open'", [Auth::id()]);
         if (!$shift) Response::error('No open shift');
         $sales = DB::fetch("SELECT COUNT(*) as cnt, COALESCE(SUM(total),0) as total FROM orders WHERE shift_id=? AND status='completed'", [$shift['id']]);
-        $shift['orders_count'] = $sales['cnt'];
-        $shift['sales_total']  = $sales['total'];
+        $shift['orders_count']  = $sales['cnt'];
+        $shift['sales_total']   = $sales['total'];
+        // Payment method breakdown
+        $shift['payments'] = DB::fetchAll(
+            "SELECT pm.name, pm.type, COALESCE(SUM(p.amount),0) AS total
+             FROM payments p
+             JOIN payment_methods pm ON pm.id = p.payment_method_id
+             JOIN orders o ON o.id = p.order_id
+             WHERE o.shift_id=? AND o.status='completed'
+             GROUP BY pm.id, pm.name, pm.type
+             ORDER BY total DESC",
+            [$shift['id']]
+        );
+        // Cash movements
+        $shift['movements'] = DB::fetchAll(
+            "SELECT type, amount, reason, created_at FROM cash_movements WHERE shift_id=? ORDER BY created_at DESC LIMIT 20",
+            [$shift['id']]
+        );
+        $expectedCash = $shift['opening_balance']
+            + array_sum(array_column(array_filter($shift['payments'], fn($p) => $p['type'] === 'cash'), 'total'))
+            + $shift['total_cash_in']
+            - $shift['total_cash_out']
+            - $shift['total_refunds'];
+        $shift['expected_cash'] = round($expectedCash, 2);
         Response::success($shift);
+        break;
+
+    case 'get_shift_history':
+        Auth::requirePermission('reports');
+        $page    = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = 20;
+        $offset  = ($page - 1) * $perPage;
+        $from    = $_GET['from'] ?? date('Y-m-01');
+        $to      = $_GET['to']   ?? date('Y-m-d');
+        $rows = DB::fetchAll(
+            "SELECT s.*, u.name AS cashier_name,
+                    (SELECT COUNT(*) FROM orders o WHERE o.shift_id=s.id AND o.status='completed') AS orders_count,
+                    (SELECT COALESCE(SUM(o.total),0) FROM orders o WHERE o.shift_id=s.id AND o.status='completed') AS sales_total
+             FROM shifts s
+             JOIN users u ON u.id=s.cashier_id
+             WHERE DATE(s.opened_at) BETWEEN ? AND ?
+             ORDER BY s.opened_at DESC
+             LIMIT ? OFFSET ?",
+            [$from, $to, $perPage, $offset]
+        );
+        $total = (int)DB::fetch(
+            "SELECT COUNT(*) AS n FROM shifts s WHERE DATE(s.opened_at) BETWEEN ? AND ?",
+            [$from, $to]
+        )['n'];
+        Response::success(['rows' => $rows, 'total' => $total]);
         break;
 
     case 'cash_in_out':

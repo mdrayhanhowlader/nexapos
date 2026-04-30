@@ -426,7 +426,8 @@ function renderItemsTable() {
 function calcRefundTotal() {
   let total = 0;
   selectedItems.forEach((it, i) => {
-    const line = (it.return_qty || 0) * parseFloat(it.unit_price);
+    const netPrice = parseFloat(it.unit_price) - parseFloat(it.discount_amount || 0);
+    const line = (it.return_qty || 0) * netPrice;
     total += line;
     const el = document.getElementById(`lineRef${i}`);
     if (el) el.textContent = fmt(line);
@@ -438,14 +439,20 @@ function calcRefundTotal() {
 function buildSummary() {
   const items = selectedItems.filter(it => it.return_qty > 0);
   if (!items.length) { toast('Select at least one item to return', 'warning'); goStep(2); return; }
-  let total = items.reduce((s, it) => s + it.return_qty * parseFloat(it.unit_price), 0);
+  let total = items.reduce((s, it) => {
+    const net = parseFloat(it.unit_price) - parseFloat(it.discount_amount || 0);
+    return s + it.return_qty * net;
+  }, 0);
   document.getElementById('retSummary').innerHTML = `
     <div style="font-size:13px;font-weight:600;margin-bottom:10px">Return Summary</div>
-    ${items.map(it => `
+    ${items.map(it => {
+      const net = parseFloat(it.unit_price) - parseFloat(it.discount_amount || 0);
+      return `
       <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)">
-        <span>${it.name} × ${it.return_qty}</span>
-        <span>${fmt(it.return_qty * parseFloat(it.unit_price))}</span>
-      </div>`).join('')}
+        <span>${it.name} × ${it.return_qty}${parseFloat(it.discount_amount||0)>0 ? ` <span style="font-size:11px;color:var(--text2)">(disc. ${fmt(parseFloat(it.discount_amount))})</span>` : ''}</span>
+        <span>${fmt(it.return_qty * net)}</span>
+      </div>`;
+    }).join('')}
     <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin-top:10px;color:var(--red)">
       <span>Total Refund</span><span>${fmt(total)}</span>
     </div>`;
