@@ -1,8 +1,10 @@
 <?php
 require_once dirname(__DIR__) . '/bootstrap.php';
 Auth::requireAuth();
-$user = Auth::user();
-$appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['value'] ?? Config::get('app.name', 'NexaPOS');
+$user       = Auth::user();
+$appName    = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['value'] ?? Config::get('app.name', 'NexaPOS');
+$canShifts  = Auth::can('shifts') || Auth::can('reports');
+$canSeeAll  = Auth::can('reports');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -67,7 +69,9 @@ canvas{max-height:300px}
     <div class="tab" data-tab="inventory" onclick="switchTab('inventory')">Inventory Value</div>
     <div class="tab" data-tab="customers" onclick="switchTab('customers')">Customers</div>
     <div class="tab" data-tab="cashier" onclick="switchTab('cashier')">Cashier</div>
+    <?php if ($canShifts): ?>
     <div class="tab" data-tab="shifts" onclick="switchTab('shifts')">Shifts</div>
+    <?php endif; ?>
   </div>
 
   <!-- Sales Summary -->
@@ -146,29 +150,77 @@ canvas{max-height:300px}
     </div>
   </div>
 
+  <?php if ($canShifts): ?>
   <div class="tab-panel" id="panel-shifts">
+
+    <!-- Filters -->
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <?php if ($canSeeAll): ?>
+      <select id="shiftCashierFilter" onchange="loadShifts(document.getElementById('fromDate').value,document.getElementById('toDate').value)"
+        style="height:36px;padding:0 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;color:var(--text1);background:#fff;min-width:180px">
+        <option value="">All Cashiers</option>
+      </select>
+      <?php endif; ?>
+      <span id="shiftPagInfo" style="font-size:12px;color:var(--text3);margin-left:auto"></span>
+      <button id="shiftPrevBtn" onclick="shiftPage(-1)" style="height:32px;padding:0 12px;border:1.5px solid var(--border);border-radius:var(--r);background:#fff;cursor:pointer;font-size:12px;font-weight:600">‹ Prev</button>
+      <button id="shiftNextBtn" onclick="shiftPage(1)"  style="height:32px;padding:0 12px;border:1.5px solid var(--border);border-radius:var(--r);background:#fff;cursor:pointer;font-size:12px;font-weight:600">Next ›</button>
+    </div>
+
+    <!-- Summary cards -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px" id="shiftStatCards">
+      <div class="sum-card"><div class="sum-lbl">Total Shifts</div><div class="sum-val" id="sst1">—</div></div>
+      <div class="sum-card"><div class="sum-lbl">Open Now</div><div class="sum-val" id="sst2" style="color:#16a34a">—</div></div>
+      <div class="sum-card"><div class="sum-lbl">Closed</div><div class="sum-val" id="sst3">—</div></div>
+      <div class="sum-card"><div class="sum-lbl">Total Sales</div><div class="sum-val" id="sst4" style="color:var(--accent)">—</div></div>
+      <div class="sum-card"><div class="sum-lbl">Avg Duration</div><div class="sum-val" id="sst5">—</div></div>
+    </div>
+
+    <!-- Shifts table -->
     <div class="table-card">
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th>#</th>
               <th>Cashier</th>
-              <th>Opened At</th>
-              <th>Closed At</th>
+              <th>Role</th>
+              <th>Shift Opened</th>
+              <th>Shift Closed</th>
               <th>Duration</th>
               <th>Opening Cash</th>
+              <th>Orders</th>
               <th>Total Sales</th>
               <th>Expected Cash</th>
               <th>Actual Cash</th>
               <th>Difference</th>
               <th>Status</th>
+              <th></th>
             </tr>
           </thead>
-          <tbody id="shiftsBody"><tr><td colspan="10" class="tbl-loading"><div class="spin"></div></td></tr></tbody>
+          <tbody id="shiftsBody">
+            <tr><td colspan="14" class="tbl-loading"><div class="spin"></div></td></tr>
+          </tbody>
         </table>
       </div>
     </div>
   </div>
+  <?php endif; ?>
+
+  <!-- Shift Detail Modal -->
+  <?php if ($canShifts): ?>
+  <div id="shiftDetailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px">
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#fff;z-index:1">
+        <h3 style="font-size:15px;font-weight:700">Shift Details</h3>
+        <button onclick="document.getElementById('shiftDetailModal').style.display='none'"
+          style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);line-height:1">×</button>
+      </div>
+      <div id="shiftDetailBody" style="padding:20px 22px">
+        <div style="text-align:center;padding:30px;color:var(--text3)">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 
 </div>
 </div>
@@ -209,7 +261,7 @@ async function loadTab(tab) {
   else if (tab === 'inventory') await loadInventory();
   else if (tab === 'customers') await loadCustReport(from, to);
   else if (tab === 'cashier') await loadCashier(from, to);
-  else if (tab === 'shifts')  await loadShifts(from, to);
+  else if (tab === 'shifts')  { _shiftPage = 1; await loadShifts(from, to); }
 }
 
 function exportCSV() {
@@ -368,52 +420,274 @@ async function loadCashier(from, to) {
     : `<tr><td colspan="4" class="tbl-empty">No data in this period</td></tr>`;
 }
 
+// ── Shift report state ─────────────────────────
+let _shiftPage = 1;
+
+function shiftPage(dir) {
+  _shiftPage = Math.max(1, _shiftPage + dir);
+  const from = document.getElementById('fromDate').value;
+  const to   = document.getElementById('toDate').value;
+  loadShifts(from, to);
+}
+
+function _shiftDur(openedAt, closedAt) {
+  const from = new Date(openedAt);
+  const to   = closedAt ? new Date(closedAt) : new Date();
+  const mins = Math.floor((to - from) / 60000);
+  if (mins < 60) return mins + 'm';
+  return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+}
+
 async function loadShifts(from, to) {
-  const res  = await api(`${API}?module=pos&action=get_shift_history&from=${from}&to=${to}`);
-  const rows = res.data?.rows || [];
+  const cashierEl = document.getElementById('shiftCashierFilter');
+  const cashierId = cashierEl ? cashierEl.value : '';
+  let url = `${API}?module=pos&action=get_shift_history&from=${from}&to=${to}&page=${_shiftPage}`;
+  if (cashierId) url += `&cashier_id=${cashierId}`;
+
+  const res  = await api(url);
+  const d    = res.data || {};
+  const rows = d.rows     || [];
+  const stats= d.stats    || {};
+
+  // Populate cashier filter dropdown (first load only)
+  if (cashierEl && (d.cashiers || []).length && cashierEl.options.length <= 1) {
+    cashierEl.innerHTML = '<option value="">All Cashiers</option>' +
+      (d.cashiers || []).map(c => `<option value="${c.id}">${c.name} (${c.role_name})</option>`).join('');
+  }
+
+  // Summary cards
+  const avgMins = Math.round(parseFloat(stats.avg_duration_mins) || 0);
+  const avgDur  = avgMins < 60 ? avgMins + 'm' : Math.floor(avgMins/60) + 'h ' + (avgMins%60) + 'm';
+  document.getElementById('sst1').textContent = stats.total_shifts  || '0';
+  document.getElementById('sst2').textContent = stats.open_shifts   || '0';
+  document.getElementById('sst3').textContent = stats.closed_shifts || '0';
+  document.getElementById('sst4').textContent = fmt(stats.grand_sales || 0);
+  document.getElementById('sst5').textContent = avgDur || '—';
+
+  // Pagination info
+  const total   = d.total || 0;
+  const perPage = 25;
+  const pages   = Math.max(1, Math.ceil(total / perPage));
+  const pagEl   = document.getElementById('shiftPagInfo');
+  if (pagEl) pagEl.textContent = `Page ${_shiftPage} of ${pages} (${total} shifts)`;
+  const prevBtn = document.getElementById('shiftPrevBtn');
+  const nextBtn = document.getElementById('shiftNextBtn');
+  if (prevBtn) prevBtn.disabled = _shiftPage <= 1;
+  if (nextBtn) nextBtn.disabled = _shiftPage >= pages;
+
+  // CSV export data
   csvData = {
     tab: 'shifts',
     rows,
     cols: [
-      {key:'cashier_name', label:'Cashier'},
-      {key:'opened_at',    label:'Opened At'},
-      {key:'closed_at',    label:'Closed At'},
-      {key:'opening_balance', label:'Opening Cash'},
-      {key:'total_sales',     label:'Total Sales'},
-      {key:'expected_balance',label:'Expected Cash'},
-      {key:'closing_balance', label:'Actual Cash'},
-      {key:'difference',      label:'Difference'},
-      {key:'status',          label:'Status'},
+      {key:'cashier_name',     label:'Cashier'},
+      {key:'role_name',        label:'Role'},
+      {key:'opened_at',        label:'Opened At'},
+      {key:'closed_at',        label:'Closed At'},
+      {key:'opening_balance',  label:'Opening Cash'},
+      {key:'orders_count',     label:'Orders'},
+      {key:'sales_total',      label:'Total Sales'},
+      {key:'expected_balance', label:'Expected Cash'},
+      {key:'closing_balance',  label:'Actual Cash'},
+      {key:'difference',       label:'Difference'},
+      {key:'note',             label:'Note'},
+      {key:'status',           label:'Status'},
     ]
   };
+
   const tbody = document.getElementById('shiftsBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="tbl-empty">No shifts in this period</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="tbl-empty">No shifts found in this period</td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map(r => {
+
+  tbody.innerHTML = rows.map((r, idx) => {
     const openDt  = new Date(r.opened_at);
     const closeDt = r.closed_at ? new Date(r.closed_at) : null;
-    const durMs   = closeDt ? closeDt - openDt : Date.now() - openDt;
-    const durMins = Math.floor(durMs / 60000);
-    const dur     = durMins < 60 ? durMins + 'm' : Math.floor(durMins/60) + 'h ' + (durMins%60) + 'm';
+    const dur     = _shiftDur(r.opened_at, r.closed_at);
     const diff    = parseFloat(r.difference || 0);
-    const diffClr = diff < 0 ? 'var(--red)' : diff > 0 ? 'var(--green)' : 'var(--text2)';
-    const stBg    = r.status === 'open' ? '#dcfce7' : '#f1f5f9';
-    const stClr   = r.status === 'open' ? '#16a34a' : '#64748b';
+    const diffClr = diff < 0 ? '#dc2626' : diff > 0 ? '#16a34a' : '#6b7280';
+    const diffTxt = r.closing_balance != null
+      ? (diff > 0 ? '+' : '') + fmt(diff)
+      : '—';
+    const stOpen  = r.status === 'open';
+    const statusHtml = stOpen
+      ? `<span style="background:#dcfce7;color:#16a34a;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">● Open</span>`
+      : `<span style="background:#f1f5f9;color:#64748b;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">Closed</span>`;
+
+    const rowNum = (_shiftPage - 1) * 25 + idx + 1;
+
     return `<tr>
-      <td style="font-weight:600">${r.cashier_name}</td>
-      <td style="font-size:12px">${openDt.toLocaleString()}</td>
-      <td style="font-size:12px">${closeDt ? closeDt.toLocaleString() : '—'}</td>
-      <td style="font-size:12px;color:var(--text2)">${dur}</td>
-      <td>${fmt(r.opening_balance)}</td>
-      <td style="font-weight:700;color:var(--green)">${fmt(r.total_sales)}</td>
-      <td>${fmt(r.expected_balance || 0)}</td>
-      <td>${r.closing_balance != null ? fmt(r.closing_balance) : '—'}</td>
-      <td style="font-weight:600;color:${diffClr}">${r.closing_balance != null ? (diff >= 0 ? '+' : '') + fmt(diff) : '—'}</td>
-      <td><span style="background:${stBg};color:${stClr};padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;text-transform:capitalize">${r.status}</span></td>
+      <td style="color:var(--text3);font-size:12px">${rowNum}</td>
+      <td>
+        <div style="font-weight:700;font-size:13px">${r.cashier_name}</div>
+        <div style="font-size:11px;color:var(--text3)">${r.role_name||''}</div>
+      </td>
+      <td><span style="font-size:11px;color:var(--text3)">${r.role_name||''}</span></td>
+      <td>
+        <div style="font-size:13px;font-weight:600">${openDt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</div>
+        <div style="font-size:11px;color:var(--text3)">${openDt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+      </td>
+      <td>
+        ${closeDt
+          ? `<div style="font-size:13px;font-weight:600">${closeDt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</div>
+             <div style="font-size:11px;color:var(--text3)">${closeDt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>`
+          : `<span style="color:#16a34a;font-size:12px;font-weight:600">Still open</span>`}
+      </td>
+      <td style="font-size:13px;color:var(--text2)">${dur}</td>
+      <td style="font-weight:600">${fmt(r.opening_balance)}</td>
+      <td style="font-weight:700;color:var(--accent)">${r.orders_count||0}</td>
+      <td style="font-weight:700;color:#16a34a">${fmt(r.sales_total||r.total_sales||0)}</td>
+      <td>${fmt(r.expected_balance||0)}</td>
+      <td style="font-weight:600">${r.closing_balance != null ? fmt(r.closing_balance) : '<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-weight:700;color:${diffClr}">${diffTxt}</td>
+      <td>${statusHtml}</td>
+      <td>
+        <button onclick="openShiftDetail(${r.id})"
+          style="padding:4px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
+          Details
+        </button>
+      </td>
     </tr>`;
   }).join('');
+}
+
+// ── Shift detail modal ──────────────────────────
+async function openShiftDetail(id) {
+  const modal = document.getElementById('shiftDetailModal');
+  const body  = document.getElementById('shiftDetailBody');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><div class="spin" style="margin:0 auto"></div></div>';
+
+  const res = await api(`${API}?module=pos&action=get_shift_detail&id=${id}`);
+  if (!res.success) { body.innerHTML = `<p style="color:var(--red);text-align:center">${res.message||'Failed to load'}</p>`; return; }
+
+  const { shift: s, payments, movements, orders, orders_count } = res.data;
+  const openDt  = new Date(s.opened_at);
+  const closeDt = s.closed_at ? new Date(s.closed_at) : null;
+  const dur     = _shiftDur(s.opened_at, s.closed_at);
+  const diff    = parseFloat(s.difference || 0);
+  const diffClr = diff < 0 ? '#dc2626' : diff > 0 ? '#16a34a' : '#6b7280';
+  const cashSales = payments.filter(p => p.type === 'cash').reduce((a,p) => a + parseFloat(p.total), 0);
+
+  body.innerHTML = `
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1e40af,#2563eb);border-radius:10px;padding:18px 20px;color:#fff;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:18px;font-weight:800">${s.cashier_name}</div>
+          <div style="font-size:12px;opacity:.8;margin-top:2px">${s.role_name} &nbsp;·&nbsp; Shift #${s.id}</div>
+        </div>
+        <span style="background:${s.status==='open'?'#22c55e':'rgba(255,255,255,.2)'};padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700">
+          ${s.status === 'open' ? '● Open' : 'Closed'}
+        </span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;font-size:12px">
+        <div><span style="opacity:.7">Opened</span><br><strong>${openDt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} ${openDt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</strong></div>
+        <div><span style="opacity:.7">Closed</span><br><strong>${closeDt ? closeDt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ' ' + closeDt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : 'Still open'}</strong></div>
+        <div><span style="opacity:.7">Duration</span><br><strong>${dur}</strong></div>
+        <div><span style="opacity:.7">Total Orders</span><br><strong>${orders_count}</strong></div>
+      </div>
+    </div>
+
+    <!-- Cash summary -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:11px;font-weight:600;color:#16a34a;margin-bottom:4px">OPENING CASH</div>
+        <div style="font-size:18px;font-weight:800;color:#15803d">${fmt(s.opening_balance)}</div>
+      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:11px;font-weight:600;color:#2563eb;margin-bottom:4px">TOTAL SALES</div>
+        <div style="font-size:18px;font-weight:800;color:#1d4ed8">${fmt(s.sales_total||s.total_sales||0)}</div>
+      </div>
+      <div style="background:${diff < 0 ? '#fef2f2' : '#f0fdf4'};border:1px solid ${diff < 0 ? '#fecaca' : '#bbf7d0'};border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:11px;font-weight:600;color:${diffClr};margin-bottom:4px">DIFFERENCE</div>
+        <div style="font-size:18px;font-weight:800;color:${diffClr}">${s.closing_balance != null ? (diff > 0 ? '+' : '') + fmt(diff) : '—'}</div>
+      </div>
+    </div>
+
+    <!-- Payment breakdown -->
+    <div style="margin-bottom:18px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:10px">Payment Method Breakdown</div>
+      ${payments.length ? payments.map(p => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#f9fafb;border-radius:7px;margin-bottom:6px;border:1px solid #f3f4f6">
+          <div>
+            <span style="font-weight:600;font-size:13px">${p.name}</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:6px">${p.txn_count} transaction${p.txn_count!=1?'s':''}</span>
+          </div>
+          <strong style="font-size:14px;color:#1d4ed8">${fmt(p.total)}</strong>
+        </div>`).join('')
+      : '<div style="color:var(--text3);font-size:13px;padding:8px 0">No payments recorded</div>'}
+    </div>
+
+    <!-- Expected vs Actual cash -->
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin-bottom:18px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#92400e;margin-bottom:10px">Cash Reconciliation</div>
+      ${[
+        ['Opening Balance', fmt(s.opening_balance)],
+        ['+ Cash Sales',    fmt(cashSales)],
+        ['+ Cash In',       fmt(s.total_cash_in||0)],
+        ['− Cash Out',      '−' + fmt(s.total_cash_out||0)],
+        ['− Refunds',       '−' + fmt(s.total_refunds||0)],
+        ['= Expected Cash', fmt(s.expected_balance||0), true],
+        ['Actual Cash',     s.closing_balance != null ? fmt(s.closing_balance) : '—', false, true],
+      ].map(([lbl,val,bold,highlight]) => `
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #fde68a;font-size:13px${bold?';font-weight:800;border-top:2px solid #f59e0b;padding-top:8px':''}${highlight?';color:'+diffClr+';font-weight:800':''}">
+          <span style="color:#78350f">${lbl}</span>
+          <strong>${val}</strong>
+        </div>`).join('')}
+    </div>
+
+    <!-- Cash movements -->
+    ${movements.length ? `
+    <div style="margin-bottom:18px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:10px">Cash In / Out Movements</div>
+      ${movements.map(m => {
+        const isCashIn = m.type === 'cash_in';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f9fafb;border-radius:7px;margin-bottom:5px;border:1px solid #f3f4f6">
+          <div>
+            <span style="font-size:12px;font-weight:600;color:${isCashIn ? '#16a34a' : '#dc2626'}">${isCashIn ? '↑ Cash In' : '↓ Cash Out'}</span>
+            ${m.reason ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">— ${m.reason}</span>` : ''}
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">By ${m.by_name} · ${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+          <strong style="color:${isCashIn ? '#16a34a' : '#dc2626'}">${isCashIn ? '+' : '−'}${fmt(m.amount)}</strong>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+
+    <!-- Recent orders -->
+    ${orders.length ? `
+    <div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:10px">
+        Recent Orders ${orders_count > 10 ? `(showing 10 of ${orders_count})` : ''}
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid #e5e7eb">Invoice</th>
+              <th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid #e5e7eb">Customer</th>
+              <th style="text-align:right;padding:6px 10px;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid #e5e7eb">Total</th>
+              <th style="text-align:right;padding:6px 10px;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid #e5e7eb">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders.map(o => `<tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:7px 10px;font-weight:600;color:var(--accent)">${o.invoice_no}</td>
+              <td style="padding:7px 10px;color:var(--text2)">${o.customer_name || 'Walk-in'}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700">${fmt(o.total)}</td>
+              <td style="padding:7px 10px;text-align:right;color:var(--text3)">${new Date(o.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    ${s.note ? `<div style="margin-top:14px;padding:10px 14px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;font-size:12px;color:var(--text2)">
+      <strong>Note:</strong> ${s.note}
+    </div>` : ''}
+  `;
 }
 
 loadTab('sales');

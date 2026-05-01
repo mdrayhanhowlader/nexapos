@@ -1379,6 +1379,7 @@ const PERM_DEFS = [
   { key:'returns',   label:'Returns' },
   { key:'employees', label:'Employees' },
   { key:'settings',  label:'Settings' },
+  { key:'shifts',    label:'Shifts' },
 ];
 
 async function loadRolesPermissions() {

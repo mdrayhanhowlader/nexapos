@@ -120,7 +120,7 @@ switch ($action) {
         if (!is_array($perms)) Response::error('Invalid permissions data');
         // Sanitise — only allow known permission keys
         $allowed = ['all','pos','products','inventory','orders','customers','reports',
-                    'expenses','purchases','suppliers','returns','employees','settings'];
+                    'expenses','purchases','suppliers','returns','employees','settings','shifts'];
         $clean = [];
         foreach ($allowed as $k) {
             if (!empty($perms[$k])) $clean[$k] = true;

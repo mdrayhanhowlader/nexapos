@@ -421,28 +421,141 @@ switch ($action) {
         break;
 
     case 'get_shift_history':
-        Auth::requirePermission('reports');
-        $page    = max(1, (int)($_GET['page'] ?? 1));
-        $perPage = 20;
-        $offset  = ($page - 1) * $perPage;
-        $from    = $_GET['from'] ?? date('Y-m-01');
-        $to      = $_GET['to']   ?? date('Y-m-d');
+        // Super admin & manager (reports perm) see all shifts
+        // Cashier with 'shifts' perm sees only their own
+        $canSeeAll = Auth::can('reports');
+        if (!$canSeeAll && !Auth::can('shifts')) {
+            Response::forbidden();
+        }
+
+        $page       = max(1, (int)($_GET['page'] ?? 1));
+        $perPage    = 25;
+        $offset     = ($page - 1) * $perPage;
+        $from       = $_GET['from']      ?? date('Y-m-01');
+        $to         = $_GET['to']        ?? date('Y-m-d');
+        $cashierId  = $canSeeAll ? (int)($_GET['cashier_id'] ?? 0) : Auth::id();
+
+        $where  = 'DATE(s.opened_at) BETWEEN ? AND ?';
+        $params = [$from, $to];
+        if ($cashierId) { $where .= ' AND s.cashier_id=?'; $params[] = $cashierId; }
+
         $rows = DB::fetchAll(
-            "SELECT s.*, u.name AS cashier_name,
-                    (SELECT COUNT(*) FROM orders o WHERE o.shift_id=s.id AND o.status='completed') AS orders_count,
-                    (SELECT COALESCE(SUM(o.total),0) FROM orders o WHERE o.shift_id=s.id AND o.status='completed') AS sales_total
+            "SELECT s.*,
+                    u.name  AS cashier_name,
+                    r.name  AS role_name,
+                    (SELECT COUNT(*) FROM orders o
+                     WHERE o.shift_id=s.id AND o.status='completed') AS orders_count,
+                    (SELECT COALESCE(SUM(o.total),0) FROM orders o
+                     WHERE o.shift_id=s.id AND o.status='completed') AS sales_total,
+                    (SELECT COALESCE(SUM(o.total_discount),0) FROM orders o
+                     WHERE o.shift_id=s.id AND o.status='completed') AS total_discounts,
+                    (SELECT COALESCE(SUM(o.total_tax),0) FROM orders o
+                     WHERE o.shift_id=s.id AND o.status='completed') AS total_vat
              FROM shifts s
              JOIN users u ON u.id=s.cashier_id
-             WHERE DATE(s.opened_at) BETWEEN ? AND ?
+             JOIN roles r ON r.id=u.role_id
+             WHERE $where
              ORDER BY s.opened_at DESC
              LIMIT ? OFFSET ?",
-            [$from, $to, $perPage, $offset]
+            array_merge($params, [$perPage, $offset])
         );
+
+        $cntParams = [$from, $to];
+        if ($cashierId) $cntParams[] = $cashierId;
         $total = (int)DB::fetch(
-            "SELECT COUNT(*) AS n FROM shifts s WHERE DATE(s.opened_at) BETWEEN ? AND ?",
-            [$from, $to]
+            "SELECT COUNT(*) AS n FROM shifts s
+             WHERE $where",
+            $cntParams
         )['n'];
-        Response::success(['rows' => $rows, 'total' => $total]);
+
+        // Summary stats for this date range + filter
+        $stats = DB::fetch(
+            "SELECT COUNT(*) AS total_shifts,
+                    SUM(CASE WHEN s.status='open' THEN 1 ELSE 0 END) AS open_shifts,
+                    SUM(CASE WHEN s.status='closed' THEN 1 ELSE 0 END) AS closed_shifts,
+                    COALESCE(SUM(s.total_sales),0) AS grand_sales,
+                    COALESCE(SUM(s.opening_balance),0) AS total_opening,
+                    COALESCE(AVG(TIMESTAMPDIFF(MINUTE,s.opened_at,IF(s.closed_at IS NULL,NOW(),s.closed_at))),0) AS avg_duration_mins
+             FROM shifts s
+             WHERE $where",
+            $cntParams
+        );
+
+        // All cashiers list (for filter dropdown — admin/manager only)
+        $cashiers = $canSeeAll
+            ? DB::fetchAll("SELECT u.id, u.name, r.name AS role_name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.status='active' ORDER BY u.name")
+            : [];
+
+        Response::success([
+            'rows'     => $rows,
+            'total'    => $total,
+            'stats'    => $stats,
+            'cashiers' => $cashiers,
+            'can_see_all' => $canSeeAll,
+        ]);
+        break;
+
+    case 'get_shift_detail':
+        $canSeeAll = Auth::can('reports');
+        if (!$canSeeAll && !Auth::can('shifts')) Response::forbidden();
+        $shiftId = (int)($_GET['id'] ?? 0);
+        if (!$shiftId) Response::error('shift id required');
+
+        $shift = DB::fetch(
+            "SELECT s.*, u.name AS cashier_name, r.name AS role_name
+             FROM shifts s
+             JOIN users u ON u.id=s.cashier_id
+             JOIN roles r ON r.id=u.role_id
+             WHERE s.id=?" . (!$canSeeAll ? " AND s.cashier_id=?" : ""),
+            $canSeeAll ? [$shiftId] : [$shiftId, Auth::id()]
+        );
+        if (!$shift) Response::error('Shift not found', 404);
+
+        // Payment method breakdown
+        $payments = DB::fetchAll(
+            "SELECT pm.name, pm.type, pm.color,
+                    COALESCE(SUM(p.amount),0) AS total,
+                    COUNT(DISTINCT p.order_id) AS txn_count
+             FROM payments p
+             JOIN payment_methods pm ON pm.id=p.payment_method_id
+             JOIN orders o ON o.id=p.order_id
+             WHERE o.shift_id=? AND o.status='completed'
+             GROUP BY pm.id, pm.name, pm.type, pm.color
+             ORDER BY total DESC",
+            [$shiftId]
+        );
+
+        // Cash movements
+        $movements = DB::fetchAll(
+            "SELECT cm.type, cm.amount, cm.reason, cm.created_at, u.name AS by_name
+             FROM cash_movements cm
+             JOIN users u ON u.id=cm.user_id
+             WHERE cm.shift_id=?
+             ORDER BY cm.created_at ASC",
+            [$shiftId]
+        );
+
+        // Orders list (latest 10)
+        $orders = DB::fetchAll(
+            "SELECT o.invoice_no, o.total, o.total_discount, o.created_at, c.name AS customer_name
+             FROM orders o
+             LEFT JOIN customers c ON c.id=o.customer_id
+             WHERE o.shift_id=? AND o.status='completed'
+             ORDER BY o.created_at DESC LIMIT 10",
+            [$shiftId]
+        );
+
+        $ordersCount = (int)DB::fetch(
+            "SELECT COUNT(*) AS n FROM orders WHERE shift_id=? AND status='completed'", [$shiftId]
+        )['n'];
+
+        Response::success([
+            'shift'        => $shift,
+            'payments'     => $payments,
+            'movements'    => $movements,
+            'orders'       => $orders,
+            'orders_count' => $ordersCount,
+        ]);
         break;
 
     case 'cash_in_out':
