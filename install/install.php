@@ -87,6 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->exec("SET FOREIGN_KEY_CHECKS=0");
                 $sql = file_get_contents(SCHEMA_FILE);
+                // Convert INSERT INTO → INSERT IGNORE INTO so existing rows are skipped cleanly
+                $sql = preg_replace('/\bINSERT INTO\b/', 'INSERT IGNORE INTO', $sql);
                 $statements = array_filter(
                     array_map('trim', explode(";\n", $sql)),
                     fn($s) => $s !== '' && !str_starts_with(ltrim($s), '--')
@@ -97,8 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $pdo->exec($stmt);
                         } catch (PDOException $se) {
                             $msg = $se->getMessage();
-                            if (!str_contains($msg, 'Duplicate entry') &&
-                                !str_contains($msg, 'already exists')) {
+                            if (!str_contains($msg, 'already exists')) {
                                 throw $se;
                             }
                         }
@@ -122,6 +123,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO settings (`key`,value,`group`) VALUES ('timezone',?,'general')
                                    ON DUPLICATE KEY UPDATE value=?");
             $stmt->execute([$formData['timezone'], $formData['timezone']]);
+        } catch (PDOException $e) { /* non-fatal */ }
+    }
+
+    if (!$error) {
+        // ── Ensure Super Admin role exists ────────────────────────────────────
+        try {
+            $pdo->exec("INSERT IGNORE INTO roles (id, name, slug, permissions, created_at)
+                        VALUES (1, 'Super Admin', 'super_admin', '{\"all\":true}', NOW())");
         } catch (PDOException $e) { /* non-fatal */ }
     }
 
