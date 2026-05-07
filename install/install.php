@@ -85,21 +85,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Schema file not found: database/schema.sql';
         } else {
             try {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS=0");
                 $sql = file_get_contents(SCHEMA_FILE);
-                // Split on semicolons but ignore comment lines
                 $statements = array_filter(
                     array_map('trim', explode(";\n", $sql)),
                     fn($s) => $s !== '' && !str_starts_with(ltrim($s), '--')
                 );
                 foreach ($statements as $stmt) {
-                    if (trim($stmt)) $pdo->exec($stmt);
+                    if (trim($stmt)) {
+                        try {
+                            $pdo->exec($stmt);
+                        } catch (PDOException $se) {
+                            $msg = $se->getMessage();
+                            if (!str_contains($msg, 'Duplicate entry') &&
+                                !str_contains($msg, 'already exists')) {
+                                throw $se;
+                            }
+                        }
+                    }
                 }
+                $pdo->exec("SET FOREIGN_KEY_CHECKS=1");
             } catch (PDOException $e) {
-                // Ignore duplicate key / already-exists errors
-                if (!str_contains($e->getMessage(), 'Duplicate entry') &&
-                    !str_contains($e->getMessage(), 'already exists')) {
-                    $error = 'Schema error: ' . $e->getMessage();
-                }
+                $pdo->exec("SET FOREIGN_KEY_CHECKS=1");
+                $error = 'Schema error: ' . $e->getMessage();
             }
         }
     }
