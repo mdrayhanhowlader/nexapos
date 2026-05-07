@@ -336,7 +336,7 @@ tr:hover td{background:#fafafa}
 
 <script>
 const API     = '../routes/api.php';
-const IMGBASE = '/nexapos/public/uploads/products/';
+const IMGBASE = '<?= rtrim(app_url('public/uploads/products'), '/') ?>/';
 
 let prods=[], cats=[], filtered=[], pg=1, PER=25, eid=null, saving=false;
 
@@ -704,7 +704,7 @@ async function loadAddons() {
   }
   list.innerHTML = rows.map(a => {
     const img = a.image
-      ? `<img src="/nexapos/public/uploads/products/${a.image}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0">`
+      ? `<img src="${IMGBASE}${a.image}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0">`
       : `<div style="width:32px;height:32px;border-radius:6px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">➕</div>`;
     const reqBadge = a.is_required
       ? `<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px">Required</span>`

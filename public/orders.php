@@ -198,7 +198,7 @@ tr:hover td{background:#fafafa}
         <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
         Export
       </button>
-      <button class="tb-btn btn-primary" onclick="location.href='/nexapos/public/pos.php'">
+      <button class="tb-btn btn-primary" onclick="location.href='<?= app_url('public/pos.php') ?>'">
         <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         New Sale
       </button>

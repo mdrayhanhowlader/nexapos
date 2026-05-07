@@ -1,4 +1,6 @@
 <?php
+/** @var string $action — injected by routes/api.php */
+$action ??= '';
 switch ($action) {
 
     case 'sales_summary':

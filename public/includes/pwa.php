@@ -1,8 +1,8 @@
 <?php
 // PWA meta tags + manifest — include inside <head> on every page
-$base = '/nexapos/public';
+$base = rtrim(app_url('public'), '/');
 ?>
-<link rel="manifest" href="<?= $base ?>/manifest.json">
+<link rel="manifest" href="<?= $base ?>/manifest.php">
 <meta name="theme-color" content="#2563eb">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,7 +13,7 @@ $base = '/nexapos/public';
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/nexapos/public/sw.js', { scope: '/nexapos/public/' })
+    navigator.serviceWorker.register('<?= $base ?>/sw.js', { scope: '<?= $base ?>/' })
       .catch(() => {});
   });
 }

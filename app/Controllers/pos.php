@@ -1,5 +1,6 @@
 <?php
-$db = DB::connect();
+/** @var string $action — injected by routes/api.php */
+$action ??= '';
 
 switch ($action) {
 

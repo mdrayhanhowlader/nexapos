@@ -249,7 +249,7 @@ $appName = DB::fetch("SELECT value FROM settings WHERE `key`='business_name'")['
 <script src="assets/js/app.js"></script>
 <script>
 const API = '../routes/api.php';
-const IMGBASE = '/nexapos/public/uploads/products/';
+const IMGBASE = '<?= rtrim(app_url('public/uploads/products'), '/') ?>/';
 let currentPage = 1, totalPages = 1, saving = false;
 let items = [], products = [], suppliers = [], categories = [];
 

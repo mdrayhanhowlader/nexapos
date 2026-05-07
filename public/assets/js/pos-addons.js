@@ -59,7 +59,7 @@ const POSAddons = {
         ? '<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;margin-left:5px">Required</span>'
         : '';
       const img = a.image
-        ? `<img src="/nexapos/public/uploads/products/${a.image}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0">`
+        ? `<img src="${(window.NEXAPOS?.basePath||'/public')}/uploads/products/${a.image}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0">`
         : `<div style="width:36px;height:36px;border-radius:6px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">➕</div>`;
       return `
         <label style="display:flex;align-items:center;gap:10px;padding:10px 4px;

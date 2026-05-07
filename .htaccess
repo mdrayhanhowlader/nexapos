@@ -1,4 +1,33 @@
 Options -Indexes
 
-# Allow public/ folder freely — web app lives there
-# app/, config/, routes/ have their own .htaccess protection
+# ── Security: block direct access to sensitive directories ──────────────────
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Always pass through requests already targeting public/
+  RewriteCond %{REQUEST_URI} ^/public/ [OR]
+  RewriteCond %{REQUEST_URI} ^/public$
+  RewriteRule ^ - [L]
+
+  # Installer — pass through
+  RewriteRule ^install(/.*)?$ install$1 [L]
+
+  # Bare root → login
+  RewriteRule ^$ public/login.php [L,R=302]
+
+  # Rewrite PAGE.php → public/PAGE.php (Hostinger: domain.com/pos.php → public/pos.php)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([^/]+\.php.*)$ public/$1 [L]
+
+  # Clean URL: /dashboard → public/dashboard.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([a-z_-]+)$ public/$1.php [L]
+</IfModule>
+
+# ── Block direct access to source/data files ────────────────────────────────
+<FilesMatch "\.(env|sql|log|sh|bak|md)$">
+  Order Allow,Deny
+  Deny from all
+</FilesMatch>

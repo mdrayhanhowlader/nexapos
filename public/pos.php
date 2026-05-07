@@ -15,7 +15,6 @@ $taxRate  = DB::fetch("SELECT value FROM settings WHERE `key`='tax_rate'")['valu
 <?php include __DIR__ . '/includes/pwa.php'; ?>
 <meta name="theme-color" content="#111827">
 <title>POS — <?= htmlspecialchars($appName) ?></title>
-<link rel="manifest" href="/nexapos/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -406,7 +405,7 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
 
   <!-- TOPBAR -->
   <div id="topbar">
-    <a href="/nexapos/public/dashboard.php" class="brand" title="Dashboard">
+    <a href="<?= app_url('public/dashboard.php') ?>" class="brand" title="Dashboard">
       <span class="brand-ico" style="<?= $appLogo ? 'background:transparent;overflow:hidden;padding:0' : '' ?>">
         <?php if ($appLogo): ?>
           <img src="/<?= htmlspecialchars($appLogo) ?>" alt="Logo" style="width:28px;height:28px;object-fit:contain;border-radius:6px">
@@ -430,7 +429,7 @@ html,body{height:100%;font-family:var(--font);font-size:14px;color:var(--text1);
         Hold
         <span class="tb-badge" id="heldBadge">0</span>
       </button>
-      <button class="tb-btn" onclick="location.href='/nexapos/public/orders.php'">
+      <button class="tb-btn" onclick="location.href='<?= app_url('public/orders.php') ?>'">
         <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M19 3H4.99C3.89 3 3 3.9 3 5l.01 14c0 1.1.89 2 1.99 2H19c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/></svg>
         Orders
       </button>
@@ -914,25 +913,27 @@ window.NEXAPOS = {
   vatInclDefault:  <?= (DB::fetch("SELECT value FROM settings WHERE `key`='tax_inclusive_default'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
   bkashApiEnabled: <?= (DB::fetch("SELECT value FROM settings WHERE `key`='bkash_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
   nagadApiEnabled: <?= (DB::fetch("SELECT value FROM settings WHERE `key`='nagad_enabled'")['value'] ?? '0') === '1' ? 'true' : 'false' ?>,
-  user: { id: <?= json_encode($user['id'] ?? 0) ?>, name: <?= json_encode($user['name'] ?? '') ?> }
+  user:    { id: <?= json_encode($user['id'] ?? 0) ?>, name: <?= json_encode($user['name'] ?? '') ?> },
+  basePath: <?= json_encode(rtrim(app_url('public'), '/')) ?>
 };
 </script>
 
+<?php $_v = time(); $_a = rtrim(app_url('public/assets/js'), '/'); ?>
 <!-- JS modules -->
-<script src="/nexapos/public/assets/js/pos-core.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-products.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-cart.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-scanner.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-payment.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-modals.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-printer.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-offline.js?v=<?= time() ?>"></script>
-<script src="/nexapos/public/assets/js/pos-addons.js?v=<?= time() ?>"></script>
+<script src="<?= $_a ?>/pos-core.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-products.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-cart.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-scanner.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-payment.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-modals.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-printer.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-offline.js?v=<?= $_v ?>"></script>
+<script src="<?= $_a ?>/pos-addons.js?v=<?= $_v ?>"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/nexapos/sw.js').then(reg => {
+    navigator.serviceWorker.register('<?= rtrim(app_url('public'), '/') ?>/sw.js').then(reg => {
       // Register background sync when going back online
       window.addEventListener('online', () => {
         if (reg.sync) reg.sync.register('sync-pending-orders').catch(() => {});
